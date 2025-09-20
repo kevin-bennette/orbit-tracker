@@ -1,10 +1,63 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8">
-  <title>$Title$</title>
+    <title>Star Lookup</title>
+    <style>
+        table { border-collapse: collapse; width: 70%; margin: 20px auto; }
+        th, td { border: 1px solid black; padding: 8px; text-align: center; }
+        th { background-color: #eee; }
+        input { margin: 10px; padding: 5px; }
+    </style>
 </head>
 <body>
-$END$
+    <h2 style="text-align:center;">Star Lookup</h2>
+    <div style="text-align:center;">
+        <input type="text" id="starName" placeholder="Enter star name"/>
+        <button onclick="fetchStar()">Search</button>
+    </div>
+    <table id="resultTable" style="display:none;">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>RA</th>
+                <th>Dec</th>
+                <th>Parallax</th>
+            </tr>
+        </thead>
+        <tbody id="resultBody"></tbody>
+    </table>
+
+    <script>
+        async function fetchStar() {
+            const name = document.getElementById('starName').value;
+            if (!name) return alert("Enter star name!");
+
+            const res = await fetch(`/star?name=${encodeURIComponent(name)}`);
+            const data = await res.text();
+
+            // Simple HTML parsing (or display raw if parsing fails)
+            const parser = new DOMParser();
+            const xml = parser.parseFromString(data, "application/xml");
+            const table = document.getElementById('resultTable');
+            const tbody = document.getElementById('resultBody');
+            tbody.innerHTML = "";
+
+            const row = xml.querySelector("TR");
+            if (row) {
+                const cells = row.querySelectorAll("TD");
+                const tr = document.createElement("tr");
+                cells.forEach(cell => {
+                    const td = document.createElement("td");
+                    td.innerText = cell.textContent;
+                    tr.appendChild(td);
+                });
+                tbody.appendChild(tr);
+                table.style.display = "";
+            } else {
+                alert("Star not found");
+                table.style.display = "none";
+            }
+        }
+    </script>
 </body>
 </html>
