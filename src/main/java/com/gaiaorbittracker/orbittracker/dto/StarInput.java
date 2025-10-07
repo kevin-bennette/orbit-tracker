@@ -13,6 +13,8 @@ public class StarInput {
     private Double pmdec;
     private Double parallax;
     private Double radialVelocity;
+    private Double timePeriodYears; // Time period for prediction in years
+    private Integer timeSteps; // Number of time steps for detailed prediction
 
     public StarInput() {}
 
@@ -37,4 +39,10 @@ public class StarInput {
 
     public Double getRadialVelocity() { return radialVelocity; }
     public void setRadialVelocity(Double radialVelocity) { this.radialVelocity = radialVelocity; }
+
+    public Double getTimePeriodYears() { return timePeriodYears; }
+    public void setTimePeriodYears(Double timePeriodYears) { this.timePeriodYears = timePeriodYears; }
+
+    public Integer getTimeSteps() { return timeSteps; }
+    public void setTimeSteps(Integer timeSteps) { this.timeSteps = timeSteps; }
 }

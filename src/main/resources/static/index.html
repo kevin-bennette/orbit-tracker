@@ -1,63 +1,535 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Star Lookup</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Orbit Tracker - Gaia DR3 & SIMBAD</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        table { border-collapse: collapse; width: 70%; margin: 20px auto; }
-        th, td { border: 1px solid black; padding: 8px; text-align: center; }
-        th { background-color: #eee; }
-        input { margin: 10px; padding: 5px; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: white;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+        
+        .search-section {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+        
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.9);
+            color: #333;
+            font-size: 16px;
+        }
+        
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        
+        .btn {
+            background: linear-gradient(45deg, #ff6b6b, #ee5a24);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            width: 100%;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+        
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .results-section {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .star-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .info-card {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        
+        .info-card h3 {
+            font-size: 1.2rem;
+            margin-bottom: 10px;
+            color: #ffd700;
+        }
+        
+        .info-card p {
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+        
+        .charts-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-top: 30px;
+        }
+        
+        .chart-container {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 10px;
+        }
+        
+        .chart-container h3 {
+            text-align: center;
+            margin-bottom: 20px;
+            color: #ffd700;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            font-size: 1.2rem;
+        }
+        
+        .error {
+            background: rgba(255, 0, 0, 0.2);
+            border: 1px solid rgba(255, 0, 0, 0.5);
+            color: #ff6b6b;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        
+        @media (max-width: 768px) {
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+            
+            .charts-container {
+                grid-template-columns: 1fr;
+            }
+            
+            .header h1 {
+                font-size: 2rem;
+            }
+        }
     </style>
 </head>
 <body>
-    <h2 style="text-align:center;">Star Lookup</h2>
-    <div style="text-align:center;">
-        <input type="text" id="starName" placeholder="Enter star name"/>
-        <button onclick="fetchStar()">Search</button>
-    </div>
-    <table id="resultTable" style="display:none;">
-        <thead>
-            <tr>
-                <th>Name</th>
-                <th>RA</th>
-                <th>Dec</th>
-                <th>Parallax</th>
-            </tr>
-        </thead>
-        <tbody id="resultBody"></tbody>
-    </table>
+    <div class="container">
+        <div class="header">
+            <h1>🌌 Orbit Tracker</h1>
+            <p>Track stellar motion using Gaia DR3 and SIMBAD data</p>
+        </div>
+        
+        <div class="search-section">
+            <h2 style="margin-bottom: 20px; color: #ffd700;">Star Search & Prediction</h2>
+            
+            <div class="form-group">
+                <label for="starName">Star Name (e.g., "Vega", "Sirius", "Alpha Centauri"):</label>
+                <input type="text" id="starName" placeholder="Enter star name">
+            </div>
+            
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="timePeriod">Time Period (years):</label>
+                    <input type="number" id="timePeriod" value="100" min="1" max="10000" step="1">
+                </div>
+                <div class="form-group">
+                    <label for="timeSteps">Time Steps:</label>
+                    <input type="number" id="timeSteps" value="50" min="10" max="200" step="10">
+                </div>
+            </div>
+            
+            <button class="btn" onclick="searchAndPredict()" id="searchBtn">
+                🔍 Search Star & Predict Motion
+            </button>
+        </div>
+        
+        <div id="results" style="display: none;">
+            <div class="results-section">
+                <h2 style="margin-bottom: 20px; color: #ffd700;">Star Information</h2>
+                <div id="starInfo" class="star-info"></div>
+                
+                <h2 style="margin-bottom: 20px; color: #ffd700;">Motion Predictions</h2>
+                <div class="charts-container">
+                    <div class="chart-container">
+                        <h3>Position Over Time</h3>
+                        <canvas id="positionChart"></canvas>
+                    </div>
+                    <div class="chart-container">
+                        <h3>Velocity Over Time</h3>
+                        <canvas id="velocityChart"></canvas>
+                    </div>
+                </div>
+                
+                <div class="chart-container" style="margin-top: 30px;">
+                    <h3>Angular Separation from Initial Position</h3>
+                    <canvas id="separationChart"></canvas>
+                </div>
+            </div>
+        </div>
+        
+        <div id="loading" class="loading" style="display: none;">
+            <p>🔭 Searching Gaia DR3 database...</p>
+        </div>
+        
+        <div id="error" class="error" style="display: none;"></div>
+</div>
 
-    <script>
-        async function fetchStar() {
-            const name = document.getElementById('starName').value;
-            if (!name) return alert("Enter star name!");
-
-            const res = await fetch(`/star?name=${encodeURIComponent(name)}`);
-            const data = await res.text();
-
-            // Simple HTML parsing (or display raw if parsing fails)
-            const parser = new DOMParser();
-            const xml = parser.parseFromString(data, "application/xml");
-            const table = document.getElementById('resultTable');
-            const tbody = document.getElementById('resultBody');
-            tbody.innerHTML = "";
-
-            const row = xml.querySelector("TR");
-            if (row) {
-                const cells = row.querySelectorAll("TD");
-                const tr = document.createElement("tr");
-                cells.forEach(cell => {
-                    const td = document.createElement("td");
-                    td.innerText = cell.textContent;
-                    tr.appendChild(td);
+<script>
+        let positionChart, velocityChart, separationChart;
+        
+        async function searchAndPredict() {
+            const starName = document.getElementById('starName').value.trim();
+            const timePeriod = parseFloat(document.getElementById('timePeriod').value);
+            const timeSteps = parseInt(document.getElementById('timeSteps').value);
+            
+            if (!starName) {
+                showError("Please enter a star name");
+                return;
+            }
+            
+            showLoading();
+            hideError();
+            hideResults();
+            
+            try {
+                // First, get star data from Gaia
+                const gaiaResponse = await fetch(`/api/star/gaia?name=${encodeURIComponent(starName)}`);
+                const gaiaData = await gaiaResponse.json();
+                
+                if (gaiaData.error) {
+                    throw new Error(gaiaData.error);
+                }
+                
+                // Create prediction input
+                const predictionInput = {
+                    gaiaId: starName,
+                    timePeriodYears: timePeriod,
+                    timeSteps: timeSteps
+                };
+                
+                // Get orbital prediction
+                const predictionResponse = await fetch('/api/star/predict', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(predictionInput)
                 });
-                tbody.appendChild(tr);
-                table.style.display = "";
-            } else {
-                alert("Star not found");
-                table.style.display = "none";
+                
+                const predictionData = await predictionResponse.json();
+                
+                if (predictionData.data.error) {
+                    throw new Error(predictionData.data.error);
+                }
+                
+                displayResults(gaiaData, predictionData);
+                
+            } catch (error) {
+                showError(`Error: ${error.message}`);
+            } finally {
+                hideLoading();
             }
         }
-    </script>
+        
+        function displayResults(starData, predictionData) {
+            // Display star information
+            const starInfoDiv = document.getElementById('starInfo');
+            const isMockData = starData.isMockData || false;
+            const dataSource = isMockData ? 'Mock Data (Demo)' : 'Gaia DR3';
+            
+            starInfoDiv.innerHTML = `
+                <div class="info-card">
+                    <h3>Name</h3>
+                    <p>${starData.name || 'Unknown'}</p>
+                </div>
+                <div class="info-card">
+                    <h3>Distance</h3>
+                    <p>${starData.distanceLy?.toFixed(2)} ly</p>
+                </div>
+                <div class="info-card">
+                    <h3>RA</h3>
+                    <p>${starData.ra?.toFixed(6)}°</p>
+                </div>
+                <div class="info-card">
+                    <h3>Dec</h3>
+                    <p>${starData.dec?.toFixed(6)}°</p>
+                </div>
+                <div class="info-card">
+                    <h3>Proper Motion</h3>
+                    <p>${starData.totalProperMotion?.toFixed(2)} mas/yr</p>
+                </div>
+                <div class="info-card">
+                    <h3>Radial Velocity</h3>
+                    <p>${starData.radialVelocity ? starData.radialVelocity.toFixed(2) : 'N/A'} km/s</p>
+                </div>
+                <div class="info-card">
+                    <h3>Data Source</h3>
+                    <p style="color: ${isMockData ? '#ffd700' : '#4ecdc4'}">${dataSource}</p>
+                </div>
+            `;
+            
+            // Show note if using mock data
+            if (isMockData) {
+                const noteDiv = document.createElement('div');
+                noteDiv.className = 'info-card';
+                noteDiv.style.gridColumn = '1 / -1';
+                noteDiv.style.backgroundColor = 'rgba(255, 215, 0, 0.1)';
+                noteDiv.style.border = '1px solid rgba(255, 215, 0, 0.3)';
+                noteDiv.innerHTML = `
+                    <h3 style="color: #ffd700;">📡 Demo Mode</h3>
+                    <p>Using mock data for demonstration. External APIs may be unavailable.</p>
+                `;
+                starInfoDiv.appendChild(noteDiv);
+            }
+            
+            // Create charts
+            createCharts(predictionData.data.predictions);
+            
+            // Show results
+            document.getElementById('results').style.display = 'block';
+        }
+        
+        function createCharts(predictions) {
+            const times = predictions.map(p => p.time);
+            const ra = predictions.map(p => p.ra);
+            const dec = predictions.map(p => p.dec);
+            const tangentialVel = predictions.map(p => p.tangentialVelocityKmS);
+            const radialVel = predictions.map(p => p.radialVelocityKmS);
+            const totalVel = predictions.map(p => p.totalVelocityKmS);
+            const angularSep = predictions.map(p => p.angularSeparationArcsec);
+            
+            // Position chart
+            const positionCtx = document.getElementById('positionChart').getContext('2d');
+            if (positionChart) positionChart.destroy();
+            positionChart = new Chart(positionCtx, {
+                type: 'line',
+                data: {
+                    labels: times,
+                    datasets: [{
+                        label: 'RA (degrees)',
+                        data: ra,
+                        borderColor: '#ff6b6b',
+                        backgroundColor: 'rgba(255, 107, 107, 0.1)',
+                        tension: 0.1
+                    }, {
+                        label: 'Dec (degrees)',
+                        data: dec,
+                        borderColor: '#4ecdc4',
+                        backgroundColor: 'rgba(78, 205, 196, 0.1)',
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            labels: { color: 'white' }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            title: { display: true, text: 'Time (years)', color: 'white' },
+                            ticks: { color: 'white' },
+                            grid: { color: 'rgba(255,255,255,0.1)' }
+                        },
+                        y: {
+                            title: { display: true, text: 'Position (degrees)', color: 'white' },
+                            ticks: { color: 'white' },
+                            grid: { color: 'rgba(255,255,255,0.1)' }
+                        }
+                    }
+                }
+            });
+            
+            // Velocity chart
+            const velocityCtx = document.getElementById('velocityChart').getContext('2d');
+            if (velocityChart) velocityChart.destroy();
+            velocityChart = new Chart(velocityCtx, {
+                type: 'line',
+                data: {
+                    labels: times,
+                    datasets: [{
+                        label: 'Tangential Velocity (km/s)',
+                        data: tangentialVel,
+                        borderColor: '#ffd700',
+                        backgroundColor: 'rgba(255, 215, 0, 0.1)',
+                        tension: 0.1
+                    }, {
+                        label: 'Radial Velocity (km/s)',
+                        data: radialVel,
+                        borderColor: '#ff9ff3',
+                        backgroundColor: 'rgba(255, 159, 243, 0.1)',
+                        tension: 0.1
+                    }, {
+                        label: 'Total Velocity (km/s)',
+                        data: totalVel,
+                        borderColor: '#54a0ff',
+                        backgroundColor: 'rgba(84, 160, 255, 0.1)',
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            labels: { color: 'white' }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            title: { display: true, text: 'Time (years)', color: 'white' },
+                            ticks: { color: 'white' },
+                            grid: { color: 'rgba(255,255,255,0.1)' }
+                        },
+                        y: {
+                            title: { display: true, text: 'Velocity (km/s)', color: 'white' },
+                            ticks: { color: 'white' },
+                            grid: { color: 'rgba(255,255,255,0.1)' }
+                        }
+                    }
+                }
+            });
+            
+            // Angular separation chart
+            const separationCtx = document.getElementById('separationChart').getContext('2d');
+            if (separationChart) separationChart.destroy();
+            separationChart = new Chart(separationCtx, {
+                type: 'line',
+                data: {
+                    labels: times,
+                    datasets: [{
+                        label: 'Angular Separation (arcseconds)',
+                        data: angularSep,
+                        borderColor: '#5f27cd',
+                        backgroundColor: 'rgba(95, 39, 205, 0.1)',
+                        tension: 0.1,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            labels: { color: 'white' }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            title: { display: true, text: 'Time (years)', color: 'white' },
+                            ticks: { color: 'white' },
+                            grid: { color: 'rgba(255,255,255,0.1)' }
+                        },
+                        y: {
+                            title: { display: true, text: 'Angular Separation (arcseconds)', color: 'white' },
+                            ticks: { color: 'white' },
+                            grid: { color: 'rgba(255,255,255,0.1)' }
+                        }
+                    }
+                }
+            });
+        }
+        
+        function showLoading() {
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('searchBtn').disabled = true;
+        }
+        
+        function hideLoading() {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('searchBtn').disabled = false;
+        }
+        
+        function showError(message) {
+            const errorDiv = document.getElementById('error');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+        }
+        
+        function hideError() {
+            document.getElementById('error').style.display = 'none';
+        }
+        
+        function hideResults() {
+            document.getElementById('results').style.display = 'none';
+        }
+        
+        // Allow Enter key to trigger search
+        document.getElementById('starName').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                searchAndPredict();
+            }
+        });
+</script>
 </body>
 </html>
