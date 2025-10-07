@@ -92,6 +92,13 @@ public class OrbitalCalculator {
         double pmra = (Double) starData.get("pmra"); // in mas/yr
         double pmdec = (Double) starData.get("pmdec"); // in mas/yr
         Double radialVelocity = (Double) starData.get("radialVelocity"); // in km/s
+        
+        // Check if this star has orbital motion
+        boolean hasOrbitalMotion = starData.containsKey("hasOrbitalMotion") && 
+                                 (Boolean) starData.get("hasOrbitalMotion");
+        double orbitalPeriod = hasOrbitalMotion ? (Double) starData.get("orbitalPeriod") : 0.0;
+        double eccentricity = hasOrbitalMotion ? (Double) starData.get("eccentricity") : 0.0;
+        double inclination = hasOrbitalMotion ? (Double) starData.get("inclination") : 0.0;
 
         // Convert to physical units
         double distance_pc = 1000.0 / parallax; // distance in parsecs
@@ -110,20 +117,31 @@ public class OrbitalCalculator {
         for (int i = 0; i <= timeSteps; i++) {
             double t = i * dt; // time in years
             
-            // Simple linear motion model (ignoring gravitational effects for distant stars)
-            double ra = ra0 + pmra_rad_yr * t;
-            double dec = dec0 + pmdec_rad_yr * t;
+            double ra_deg, dec_deg, current_distance_ly;
             
-            // Convert back to degrees
-            double ra_deg = Math.toDegrees(ra);
-            double dec_deg = Math.toDegrees(dec);
-            
-            // Calculate current distance (assuming constant radial velocity)
-            double current_distance_au = distance_au + rv_au_yr * t;
-            double current_distance_pc = current_distance_au / PC_TO_AU;
-            double current_distance_ly = current_distance_pc * 3.26156;
+            if (hasOrbitalMotion && orbitalPeriod > 0) {
+                // Calculate orbital motion
+                Map<String, Double> orbitalPosition = calculateOrbitalPosition(
+                    ra0, dec0, distance_au, orbitalPeriod, eccentricity, inclination, t
+                );
+                ra_deg = orbitalPosition.get("ra");
+                dec_deg = orbitalPosition.get("dec");
+                current_distance_ly = orbitalPosition.get("distance") * 3.26156;
+            } else {
+                // Simple linear motion model for single stars
+                double ra = ra0 + pmra_rad_yr * t;
+                double dec = dec0 + pmdec_rad_yr * t;
+                
+                ra_deg = Math.toDegrees(ra);
+                dec_deg = Math.toDegrees(dec);
+                
+                // Calculate current distance (assuming constant radial velocity)
+                double current_distance_au = distance_au + rv_au_yr * t;
+                current_distance_ly = current_distance_au * 3.26156;
+            }
             
             // Calculate tangential velocity (proper motion * distance)
+            double current_distance_au = current_distance_ly / 3.26156;
             double tangential_velocity_km_s = Math.sqrt(
                 Math.pow(pmra_rad_yr * current_distance_au, 2) + 
                 Math.pow(pmdec_rad_yr * current_distance_au, 2)
@@ -140,6 +158,11 @@ public class OrbitalCalculator {
                 Math.toDegrees(ra0), Math.toDegrees(dec0), ra_deg, dec_deg
             ) * 3600.0; // convert to arcseconds
 
+            // Calculate position relative to solar system barycenter
+            Map<String, Object> solarSystemPosition = calculateSolarSystemPosition(
+                ra_deg, dec_deg, current_distance_ly, t
+            );
+
             Map<String, Object> prediction = new HashMap<>();
             prediction.put("time", t);
             prediction.put("ra", ra_deg);
@@ -151,11 +174,95 @@ public class OrbitalCalculator {
             prediction.put("angularSeparationArcsec", angular_separation_arcsec);
             prediction.put("pmra", pmra);
             prediction.put("pmdec", pmdec);
+            prediction.put("hasOrbitalMotion", hasOrbitalMotion);
+            prediction.put("orbitalPeriod", orbitalPeriod);
+            
+            // Add solar system relative positions
+            prediction.putAll(solarSystemPosition);
             
             predictions.add(prediction);
         }
 
         return predictions;
+    }
+    
+    private Map<String, Double> calculateOrbitalPosition(double ra0, double dec0, double distance_au,
+                                                       double orbitalPeriod, double eccentricity, 
+                                                       double inclination, double timeYears) {
+        Map<String, Double> result = new HashMap<>();
+        
+        // Calculate mean anomaly
+        double meanAnomaly = 2.0 * Math.PI * (timeYears % orbitalPeriod) / orbitalPeriod;
+        
+        // Solve Kepler's equation for eccentric anomaly (simplified)
+        double eccentricAnomaly = meanAnomaly + eccentricity * Math.sin(meanAnomaly);
+        
+        // Calculate true anomaly
+        double trueAnomaly = 2.0 * Math.atan(Math.sqrt((1.0 + eccentricity) / (1.0 - eccentricity)) * 
+                                            Math.tan(eccentricAnomaly / 2.0));
+        
+        // Calculate orbital radius
+        double orbitalRadius = distance_au * (1.0 - eccentricity * eccentricity) / 
+                              (1.0 + eccentricity * Math.cos(trueAnomaly));
+        
+        // Calculate orbital motion in the orbital plane
+        double orbitalX = orbitalRadius * Math.cos(trueAnomaly);
+        double orbitalY = orbitalRadius * Math.sin(trueAnomaly) * Math.cos(Math.toRadians(inclination));
+        double orbitalZ = orbitalRadius * Math.sin(trueAnomaly) * Math.sin(Math.toRadians(inclination));
+        
+        // Convert back to RA/Dec (simplified transformation)
+        double ra_offset = Math.toDegrees(orbitalX / (distance_au * Math.cos(Math.toRadians(Math.toDegrees(dec0)))));
+        double dec_offset = Math.toDegrees(orbitalY / distance_au);
+        
+        // Use orbitalZ for more accurate 3D transformation
+        double dec_offset_3d = Math.toDegrees(orbitalZ / distance_au);
+        
+        result.put("ra", Math.toDegrees(ra0) + ra_offset);
+        result.put("dec", Math.toDegrees(dec0) + dec_offset + dec_offset_3d);
+        result.put("distance", orbitalRadius);
+        
+        return result;
+    }
+    
+    private Map<String, Object> calculateSolarSystemPosition(double ra, double dec, double distanceLy, double timeYears) {
+        Map<String, Object> position = new HashMap<>();
+        
+        // Convert to Cartesian coordinates relative to solar system
+        double ra_rad = Math.toRadians(ra);
+        double dec_rad = Math.toRadians(dec);
+        
+        // Convert to parsecs for calculations
+        double distance_pc = distanceLy / 3.26156;
+        
+        // Calculate Cartesian coordinates (X, Y, Z) in parsecs
+        double x = distance_pc * Math.cos(dec_rad) * Math.cos(ra_rad);
+        double y = distance_pc * Math.cos(dec_rad) * Math.sin(ra_rad);
+        double z = distance_pc * Math.sin(dec_rad);
+        
+        // Calculate distance from solar system barycenter
+        double distanceFromSun = Math.sqrt(x*x + y*y + z*z);
+        
+        // Calculate galactic coordinates (simplified)
+        double galacticL = Math.toDegrees(Math.atan2(y, x)) + 180.0; // Galactic longitude
+        double galacticB = Math.toDegrees(Math.asin(z / distanceFromSun)); // Galactic latitude
+        
+        // Calculate motion relative to solar system
+        double motionRelativeToSun = distanceFromSun * 0.00474; // km/s (simplified)
+        
+        position.put("xParsecs", x);
+        position.put("yParsecs", y);
+        position.put("zParsecs", z);
+        position.put("distanceFromSunPc", distanceFromSun);
+        position.put("distanceFromSunLy", distanceFromSun * 3.26156);
+        position.put("galacticLongitude", galacticL);
+        position.put("galacticLatitude", galacticB);
+        position.put("motionRelativeToSunKmS", motionRelativeToSun);
+        
+        // Add reference information
+        position.put("referenceSystem", "Solar System Barycenter");
+        position.put("epoch", "J2000.0");
+        
+        return position;
     }
 
     private double calculateAngularSeparation(double ra1, double dec1, double ra2, double dec2) {

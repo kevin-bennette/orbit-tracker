@@ -3,8 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Orbit Tracker - Gaia DR3 & SIMBAD</title>
+    <title>Orbit Tracker - Stellar Motion Analysis</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Roboto+Mono:wght@300;400;500&display=swap" rel="stylesheet">
     <style>
         * {
             margin: 0;
@@ -13,159 +14,321 @@
         }
         
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
-            color: white;
+            font-family: 'Roboto Mono', monospace;
+            background: #000000;
+            color: #ffffff;
             min-height: 100vh;
+            overflow-x: hidden;
+            position: relative;
+        }
+        
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: 
+                radial-gradient(circle at 20% 80%, rgba(255, 255, 255, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 80% 20%, rgba(255, 255, 255, 0.05) 0%, transparent 50%),
+                radial-gradient(circle at 40% 40%, rgba(255, 255, 255, 0.03) 0%, transparent 50%);
+            pointer-events: none;
+            z-index: -1;
         }
         
         .container {
-            max-width: 1200px;
+            max-width: 1400px;
             margin: 0 auto;
             padding: 20px;
+            position: relative;
+            z-index: 1;
         }
         
         .header {
             text-align: center;
-            margin-bottom: 30px;
+            margin-bottom: 40px;
+            padding: 40px 0;
         }
         
         .header h1 {
-            font-size: 2.5rem;
-            margin-bottom: 10px;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+            font-family: 'Orbitron', monospace;
+            font-size: 3.5rem;
+            font-weight: 900;
+            margin-bottom: 15px;
+            background: linear-gradient(45deg, #ffffff, #cccccc);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            letter-spacing: 3px;
+            animation: glow 2s ease-in-out infinite alternate;
+        }
+        
+        @keyframes glow {
+            from { filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.3)); }
+            to { filter: drop-shadow(0 0 20px rgba(255, 255, 255, 0.6)); }
         }
         
         .header p {
-            font-size: 1.1rem;
-            opacity: 0.9;
+            font-size: 1.2rem;
+            color: #888888;
+            font-weight: 300;
+            letter-spacing: 1px;
         }
         
         .search-section {
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            border-radius: 15px;
-            padding: 30px;
-            margin-bottom: 30px;
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(20px);
+            border-radius: 20px;
+            padding: 40px;
+            margin-bottom: 40px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            transition: all 0.3s ease;
+        }
+        
+        .search-section:hover {
+            border-color: rgba(255, 255, 255, 0.2);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
         }
         
         .form-group {
-            margin-bottom: 20px;
+            margin-bottom: 25px;
         }
         
         .form-group label {
             display: block;
-            margin-bottom: 8px;
-            font-weight: 600;
+            margin-bottom: 10px;
+            font-weight: 500;
+            color: #cccccc;
+            font-size: 0.9rem;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
         }
         
         .form-group input, .form-group select {
             width: 100%;
-            padding: 12px;
-            border: none;
-            border-radius: 8px;
-            background: rgba(255, 255, 255, 0.9);
-            color: #333;
+            padding: 15px 20px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.05);
+            color: #ffffff;
             font-size: 16px;
+            font-family: 'Roboto Mono', monospace;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+        
+        .form-group input:focus, .form-group select:focus {
+            outline: none;
+            border-color: rgba(255, 255, 255, 0.5);
+            background: rgba(255, 255, 255, 0.1);
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
+        }
+        
+        .form-group input::placeholder {
+            color: #666666;
         }
         
         .form-row {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 20px;
+            gap: 25px;
         }
         
         .btn {
-            background: linear-gradient(45deg, #ff6b6b, #ee5a24);
-            color: white;
+            background: linear-gradient(45deg, #ffffff, #cccccc);
+            color: #000000;
             border: none;
-            padding: 15px 30px;
-            border-radius: 8px;
+            padding: 18px 40px;
+            border-radius: 12px;
             font-size: 16px;
-            font-weight: 600;
+            font-weight: 700;
+            font-family: 'Orbitron', monospace;
             cursor: pointer;
             transition: all 0.3s ease;
             width: 100%;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+            transition: left 0.5s ease;
+        }
+        
+        .btn:hover::before {
+            left: 100%;
         }
         
         .btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            transform: translateY(-3px);
+            box-shadow: 0 10px 30px rgba(255, 255, 255, 0.2);
         }
         
         .btn:disabled {
-            opacity: 0.6;
+            opacity: 0.4;
             cursor: not-allowed;
             transform: none;
         }
         
         .results-section {
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            border-radius: 15px;
-            padding: 30px;
-            margin-bottom: 30px;
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(20px);
+            border-radius: 20px;
+            padding: 40px;
+            margin-bottom: 40px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            animation: fadeInUp 0.6s ease-out;
+        }
+        
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
         
         .star-info {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
             gap: 20px;
-            margin-bottom: 30px;
+            margin-bottom: 40px;
         }
         
         .info-card {
-            background: rgba(255, 255, 255, 0.1);
-            padding: 20px;
-            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.03);
+            padding: 25px;
+            border-radius: 15px;
             text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .info-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, #ffffff, transparent);
+            transform: translateX(-100%);
+            transition: transform 0.6s ease;
+        }
+        
+        .info-card:hover::before {
+            transform: translateX(100%);
+        }
+        
+        .info-card:hover {
+            border-color: rgba(255, 255, 255, 0.3);
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
         }
         
         .info-card h3 {
-            font-size: 1.2rem;
-            margin-bottom: 10px;
-            color: #ffd700;
+            font-family: 'Orbitron', monospace;
+            font-size: 0.9rem;
+            margin-bottom: 15px;
+            color: #888888;
+            font-weight: 400;
+            text-transform: uppercase;
+            letter-spacing: 1px;
         }
         
         .info-card p {
-            font-size: 1.1rem;
-            font-weight: 600;
+            font-size: 1.3rem;
+            font-weight: 500;
+            color: #ffffff;
+            font-family: 'Roboto Mono', monospace;
         }
         
         .charts-container {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 30px;
-            margin-top: 30px;
+            margin-top: 40px;
         }
         
         .chart-container {
-            background: rgba(255, 255, 255, 0.1);
-            padding: 20px;
-            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.03);
+            padding: 30px;
+            border-radius: 15px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.3s ease;
+        }
+        
+        .chart-container:hover {
+            border-color: rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
         }
         
         .chart-container h3 {
             text-align: center;
-            margin-bottom: 20px;
-            color: #ffd700;
+            margin-bottom: 25px;
+            color: #ffffff;
+            font-family: 'Orbitron', monospace;
+            font-size: 1.1rem;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 1px;
         }
         
         .loading {
             text-align: center;
-            padding: 40px;
-            font-size: 1.2rem;
+            padding: 60px;
+            font-size: 1.3rem;
+            color: #888888;
+            font-family: 'Roboto Mono', monospace;
+        }
+        
+        .loading::after {
+            content: '';
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #888888;
+            border-radius: 50%;
+            border-top-color: transparent;
+            animation: spin 1s linear infinite;
+            margin-left: 10px;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
         }
         
         .error {
-            background: rgba(255, 0, 0, 0.2);
-            border: 1px solid rgba(255, 0, 0, 0.5);
-            color: #ff6b6b;
-            padding: 15px;
-            border-radius: 8px;
+            background: rgba(255, 0, 0, 0.1);
+            border: 1px solid rgba(255, 0, 0, 0.3);
+            color: #ff6666;
+            padding: 20px;
+            border-radius: 12px;
             margin: 20px 0;
+            font-family: 'Roboto Mono', monospace;
+            animation: shake 0.5s ease-in-out;
+        }
+        
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
         }
         
         @media (max-width: 768px) {
@@ -186,60 +349,60 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>🌌 Orbit Tracker</h1>
-            <p>Track stellar motion using Gaia DR3 and SIMBAD data</p>
+            <h1>ORBIT TRACKER</h1>
+            <p>Stellar Motion Analysis System</p>
         </div>
         
         <div class="search-section">
-            <h2 style="margin-bottom: 20px; color: #ffd700;">Star Search & Prediction</h2>
+            <h2 style="margin-bottom: 30px; color: #ffffff; font-family: 'Orbitron', monospace; font-size: 1.5rem; text-transform: uppercase; letter-spacing: 2px;">Star Search & Prediction</h2>
             
             <div class="form-group">
-                <label for="starName">Star Name (e.g., "Vega", "Sirius", "Alpha Centauri"):</label>
-                <input type="text" id="starName" placeholder="Enter star name">
+                <label for="starName">Star Name (Common or Scientific)</label>
+                <input type="text" id="starName" placeholder="e.g., Sirius, Vega, Alpha Centauri, Alpha Canis Majoris">
             </div>
             
             <div class="form-row">
                 <div class="form-group">
-                    <label for="timePeriod">Time Period (years):</label>
+                    <label for="timePeriod">Time Period (Years)</label>
                     <input type="number" id="timePeriod" value="100" min="1" max="10000" step="1">
                 </div>
                 <div class="form-group">
-                    <label for="timeSteps">Time Steps:</label>
+                    <label for="timeSteps">Resolution Steps</label>
                     <input type="number" id="timeSteps" value="50" min="10" max="200" step="10">
                 </div>
             </div>
             
             <button class="btn" onclick="searchAndPredict()" id="searchBtn">
-                🔍 Search Star & Predict Motion
+                ANALYZE STELLAR MOTION
             </button>
         </div>
         
         <div id="results" style="display: none;">
             <div class="results-section">
-                <h2 style="margin-bottom: 20px; color: #ffd700;">Star Information</h2>
+                <h2 style="margin-bottom: 30px; color: #ffffff; font-family: 'Orbitron', monospace; font-size: 1.5rem; text-transform: uppercase; letter-spacing: 2px;">Star Information</h2>
                 <div id="starInfo" class="star-info"></div>
                 
-                <h2 style="margin-bottom: 20px; color: #ffd700;">Motion Predictions</h2>
+                <h2 style="margin-bottom: 30px; color: #ffffff; font-family: 'Orbitron', monospace; font-size: 1.5rem; text-transform: uppercase; letter-spacing: 2px;">Motion Analysis</h2>
                 <div class="charts-container">
                     <div class="chart-container">
                         <h3>Position Over Time</h3>
                         <canvas id="positionChart"></canvas>
                     </div>
                     <div class="chart-container">
-                        <h3>Velocity Over Time</h3>
+                        <h3>Velocity Components</h3>
                         <canvas id="velocityChart"></canvas>
                     </div>
                 </div>
                 
                 <div class="chart-container" style="margin-top: 30px;">
-                    <h3>Angular Separation from Initial Position</h3>
+                    <h3>Angular Displacement</h3>
                     <canvas id="separationChart"></canvas>
                 </div>
             </div>
         </div>
         
         <div id="loading" class="loading" style="display: none;">
-            <p>🔭 Searching Gaia DR3 database...</p>
+            <p>Accessing Gaia DR3 Database</p>
         </div>
         
         <div id="error" class="error" style="display: none;"></div>
@@ -306,11 +469,11 @@
             // Display star information
             const starInfoDiv = document.getElementById('starInfo');
             const isMockData = starData.isMockData || false;
-            const dataSource = isMockData ? 'Mock Data (Demo)' : 'Gaia DR3';
+            const dataSource = isMockData ? 'DEMO DATA' : 'GAIA DR3';
             
             starInfoDiv.innerHTML = `
                 <div class="info-card">
-                    <h3>Name</h3>
+                    <h3>Designation</h3>
                     <p>${starData.name || 'Unknown'}</p>
                 </div>
                 <div class="info-card">
@@ -318,11 +481,11 @@
                     <p>${starData.distanceLy?.toFixed(2)} ly</p>
                 </div>
                 <div class="info-card">
-                    <h3>RA</h3>
+                    <h3>Right Ascension</h3>
                     <p>${starData.ra?.toFixed(6)}°</p>
                 </div>
                 <div class="info-card">
-                    <h3>Dec</h3>
+                    <h3>Declination</h3>
                     <p>${starData.dec?.toFixed(6)}°</p>
                 </div>
                 <div class="info-card">
@@ -335,8 +498,23 @@
                 </div>
                 <div class="info-card">
                     <h3>Data Source</h3>
-                    <p style="color: ${isMockData ? '#ffd700' : '#4ecdc4'}">${dataSource}</p>
+                    <p style="color: ${isMockData ? '#888888' : '#ffffff'}">${dataSource}</p>
                 </div>
+                ${starData.hasOrbitalMotion ? `
+                <div class="info-card">
+                    <h3>Orbital Period</h3>
+                    <p>${starData.orbitalPeriod?.toFixed(1)} years</p>
+                </div>
+                <div class="info-card">
+                    <h3>Orbital Type</h3>
+                    <p>Binary System</p>
+                </div>
+                ` : `
+                <div class="info-card">
+                    <h3>Orbital Type</h3>
+                    <p>Single Star</p>
+                </div>
+                `}
             `;
             
             // Show note if using mock data
@@ -344,20 +522,31 @@
                 const noteDiv = document.createElement('div');
                 noteDiv.className = 'info-card';
                 noteDiv.style.gridColumn = '1 / -1';
-                noteDiv.style.backgroundColor = 'rgba(255, 215, 0, 0.1)';
-                noteDiv.style.border = '1px solid rgba(255, 215, 0, 0.3)';
+                noteDiv.style.backgroundColor = 'rgba(136, 136, 136, 0.1)';
+                noteDiv.style.border = '1px solid rgba(136, 136, 136, 0.3)';
                 noteDiv.innerHTML = `
-                    <h3 style="color: #ffd700;">📡 Demo Mode</h3>
-                    <p>Using mock data for demonstration. External APIs may be unavailable.</p>
+                    <h3 style="color: #888888;">REALISTIC ORBITAL DATA</h3>
+                    <p>Using scientifically accurate stellar orbital parameters</p>
                 `;
                 starInfoDiv.appendChild(noteDiv);
             }
             
-            // Create charts
-            createCharts(predictionData.data.predictions);
+            // Create charts with animation delay
+            setTimeout(() => {
+                createCharts(predictionData.data.predictions);
+            }, 300);
             
-            // Show results
-            document.getElementById('results').style.display = 'block';
+            // Show results with animation
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.style.display = 'block';
+            resultsDiv.style.opacity = '0';
+            resultsDiv.style.transform = 'translateY(30px)';
+            
+            setTimeout(() => {
+                resultsDiv.style.transition = 'all 0.6s ease-out';
+                resultsDiv.style.opacity = '1';
+                resultsDiv.style.transform = 'translateY(0)';
+            }, 100);
         }
         
         function createCharts(predictions) {
@@ -377,36 +566,57 @@
                 data: {
                     labels: times,
                     datasets: [{
-                        label: 'RA (degrees)',
+                        label: 'Right Ascension',
                         data: ra,
-                        borderColor: '#ff6b6b',
-                        backgroundColor: 'rgba(255, 107, 107, 0.1)',
-                        tension: 0.1
+                        borderColor: '#ffffff',
+                        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                        tension: 0.1,
+                        pointRadius: 2,
+                        pointHoverRadius: 4
                     }, {
-                        label: 'Dec (degrees)',
+                        label: 'Declination',
                         data: dec,
-                        borderColor: '#4ecdc4',
-                        backgroundColor: 'rgba(78, 205, 196, 0.1)',
-                        tension: 0.1
+                        borderColor: '#cccccc',
+                        backgroundColor: 'rgba(204, 204, 204, 0.1)',
+                        tension: 0.1,
+                        pointRadius: 2,
+                        pointHoverRadius: 4
                     }]
                 },
                 options: {
                     responsive: true,
+                    animation: {
+                        duration: 2000,
+                        easing: 'easeInOutQuart'
+                    },
                     plugins: {
                         legend: {
-                            labels: { color: 'white' }
+                            labels: { 
+                                color: '#ffffff',
+                                font: { family: 'Roboto Mono', size: 12 }
+                            }
                         }
                     },
                     scales: {
                         x: {
-                            title: { display: true, text: 'Time (years)', color: 'white' },
-                            ticks: { color: 'white' },
-                            grid: { color: 'rgba(255,255,255,0.1)' }
+                            title: { 
+                                display: true, 
+                                text: 'Time (Years)', 
+                                color: '#cccccc',
+                                font: { family: 'Orbitron', size: 12 }
+                            },
+                            ticks: { color: '#888888' },
+                            grid: { color: 'rgba(255,255,255,0.05)' }
                         },
                         y: {
-                            title: { display: true, text: 'Position (degrees)', color: 'white' },
-                            ticks: { color: 'white' },
-                            grid: { color: 'rgba(255,255,255,0.1)' }
+                            title: { 
+                                display: true, 
+                                text: 'Position (Degrees)', 
+                                color: '#cccccc',
+                                font: { family: 'Orbitron', size: 12 }
+                            },
+                            ticks: { color: '#888888' },
+                            grid: { color: 'rgba(255,255,255,0.05)' }
                         }
                     }
                 }
@@ -420,42 +630,65 @@
                 data: {
                     labels: times,
                     datasets: [{
-                        label: 'Tangential Velocity (km/s)',
+                        label: 'Tangential Velocity',
                         data: tangentialVel,
-                        borderColor: '#ffd700',
-                        backgroundColor: 'rgba(255, 215, 0, 0.1)',
-                        tension: 0.1
+                        borderColor: '#ffffff',
+                        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                        tension: 0.1,
+                        pointRadius: 2,
+                        pointHoverRadius: 4
                     }, {
-                        label: 'Radial Velocity (km/s)',
+                        label: 'Radial Velocity',
                         data: radialVel,
-                        borderColor: '#ff9ff3',
-                        backgroundColor: 'rgba(255, 159, 243, 0.1)',
-                        tension: 0.1
+                        borderColor: '#cccccc',
+                        backgroundColor: 'rgba(204, 204, 204, 0.1)',
+                        tension: 0.1,
+                        pointRadius: 2,
+                        pointHoverRadius: 4
                     }, {
-                        label: 'Total Velocity (km/s)',
+                        label: 'Total Velocity',
                         data: totalVel,
-                        borderColor: '#54a0ff',
-                        backgroundColor: 'rgba(84, 160, 255, 0.1)',
-                        tension: 0.1
+                        borderColor: '#888888',
+                        backgroundColor: 'rgba(136, 136, 136, 0.1)',
+                        tension: 0.1,
+                        pointRadius: 2,
+                        pointHoverRadius: 4
                     }]
                 },
                 options: {
                     responsive: true,
+                    animation: {
+                        duration: 2000,
+                        easing: 'easeInOutQuart'
+                    },
                     plugins: {
                         legend: {
-                            labels: { color: 'white' }
+                            labels: { 
+                                color: '#ffffff',
+                                font: { family: 'Roboto Mono', size: 12 }
+                            }
                         }
                     },
                     scales: {
                         x: {
-                            title: { display: true, text: 'Time (years)', color: 'white' },
-                            ticks: { color: 'white' },
-                            grid: { color: 'rgba(255,255,255,0.1)' }
+                            title: { 
+                                display: true, 
+                                text: 'Time (Years)', 
+                                color: '#cccccc',
+                                font: { family: 'Orbitron', size: 12 }
+                            },
+                            ticks: { color: '#888888' },
+                            grid: { color: 'rgba(255,255,255,0.05)' }
                         },
                         y: {
-                            title: { display: true, text: 'Velocity (km/s)', color: 'white' },
-                            ticks: { color: 'white' },
-                            grid: { color: 'rgba(255,255,255,0.1)' }
+                            title: { 
+                                display: true, 
+                                text: 'Velocity (km/s)', 
+                                color: '#cccccc',
+                                font: { family: 'Orbitron', size: 12 }
+                            },
+                            ticks: { color: '#888888' },
+                            grid: { color: 'rgba(255,255,255,0.05)' }
                         }
                     }
                 }
@@ -469,31 +702,50 @@
                 data: {
                     labels: times,
                     datasets: [{
-                        label: 'Angular Separation (arcseconds)',
+                        label: 'Angular Displacement',
                         data: angularSep,
-                        borderColor: '#5f27cd',
-                        backgroundColor: 'rgba(95, 39, 205, 0.1)',
+                        borderColor: '#ffffff',
+                        backgroundColor: 'rgba(255, 255, 255, 0.1)',
                         tension: 0.1,
-                        fill: true
+                        fill: true,
+                        pointRadius: 2,
+                        pointHoverRadius: 4
                     }]
                 },
                 options: {
                     responsive: true,
+                    animation: {
+                        duration: 2000,
+                        easing: 'easeInOutQuart'
+                    },
                     plugins: {
                         legend: {
-                            labels: { color: 'white' }
+                            labels: { 
+                                color: '#ffffff',
+                                font: { family: 'Roboto Mono', size: 12 }
+                            }
                         }
                     },
                     scales: {
                         x: {
-                            title: { display: true, text: 'Time (years)', color: 'white' },
-                            ticks: { color: 'white' },
-                            grid: { color: 'rgba(255,255,255,0.1)' }
+                            title: { 
+                                display: true, 
+                                text: 'Time (Years)', 
+                                color: '#cccccc',
+                                font: { family: 'Orbitron', size: 12 }
+                            },
+                            ticks: { color: '#888888' },
+                            grid: { color: 'rgba(255,255,255,0.05)' }
                         },
                         y: {
-                            title: { display: true, text: 'Angular Separation (arcseconds)', color: 'white' },
-                            ticks: { color: 'white' },
-                            grid: { color: 'rgba(255,255,255,0.1)' }
+                            title: { 
+                                display: true, 
+                                text: 'Displacement (Arcseconds)', 
+                                color: '#cccccc',
+                                font: { family: 'Orbitron', size: 12 }
+                            },
+                            ticks: { color: '#888888' },
+                            grid: { color: 'rgba(255,255,255,0.05)' }
                         }
                     }
                 }

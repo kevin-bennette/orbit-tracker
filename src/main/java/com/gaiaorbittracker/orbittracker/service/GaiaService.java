@@ -21,19 +21,101 @@ public class GaiaService {
     private final RestTemplate restTemplate = new RestTemplate();
     private static final String GAIA_TAP_URL = "https://gea.esac.esa.int/tap-server/tap/sync";
     
-    // Known star coordinates for fallback searches
-    private static final Map<String, double[]> KNOWN_STARS = new HashMap<>();
+    // Known star coordinates with multiple name aliases
+    private static final Map<String, StarInfo> KNOWN_STARS = new HashMap<>();
+    
     static {
-        KNOWN_STARS.put("sirius", new double[]{101.287155, -16.716116}); // Sirius
-        KNOWN_STARS.put("vega", new double[]{279.234734, 38.783689}); // Vega
-        KNOWN_STARS.put("alpha centauri", new double[]{219.90085, -60.83562}); // Alpha Centauri
-        KNOWN_STARS.put("betelgeuse", new double[]{88.792958, 7.407064}); // Betelgeuse
-        KNOWN_STARS.put("rigel", new double[]{78.634467, -8.201638}); // Rigel
-        KNOWN_STARS.put("procyon", new double[]{114.825494, 5.224993}); // Procyon
-        KNOWN_STARS.put("altair", new double[]{297.695827, 8.868321}); // Altair
-        KNOWN_STARS.put("arcturus", new double[]{213.915300, 19.182409}); // Arcturus
-        KNOWN_STARS.put("spica", new double[]{201.298247, -11.161319}); // Spica
-        KNOWN_STARS.put("antares", new double[]{247.351915, -26.432002}); // Antares
+        // Sirius - Alpha Canis Majoris
+        StarInfo sirius = new StarInfo("Sirius", "Alpha Canis Majoris", new double[]{101.287155, -16.716116});
+        KNOWN_STARS.put("sirius", sirius);
+        KNOWN_STARS.put("alpha canis majoris", sirius);
+        KNOWN_STARS.put("alpha canis major", sirius);
+        KNOWN_STARS.put("dog star", sirius);
+        
+        // Vega - Alpha Lyrae
+        StarInfo vega = new StarInfo("Vega", "Alpha Lyrae", new double[]{279.234734, 38.783689});
+        KNOWN_STARS.put("vega", vega);
+        KNOWN_STARS.put("alpha lyrae", vega);
+        KNOWN_STARS.put("alpha lyra", vega);
+        
+        // Alpha Centauri
+        StarInfo alphaCentauri = new StarInfo("Alpha Centauri", "Rigil Kentaurus", new double[]{219.90085, -60.83562});
+        KNOWN_STARS.put("alpha centauri", alphaCentauri);
+        KNOWN_STARS.put("rigil kentaurus", alphaCentauri);
+        KNOWN_STARS.put("rigil kent", alphaCentauri);
+        KNOWN_STARS.put("proxima centauri", alphaCentauri);
+        
+        // Betelgeuse - Alpha Orionis
+        StarInfo betelgeuse = new StarInfo("Betelgeuse", "Alpha Orionis", new double[]{88.792958, 7.407064});
+        KNOWN_STARS.put("betelgeuse", betelgeuse);
+        KNOWN_STARS.put("alpha orionis", betelgeuse);
+        KNOWN_STARS.put("alpha orion", betelgeuse);
+        
+        // Rigel - Beta Orionis
+        StarInfo rigel = new StarInfo("Rigel", "Beta Orionis", new double[]{78.634467, -8.201638});
+        KNOWN_STARS.put("rigel", rigel);
+        KNOWN_STARS.put("beta orionis", rigel);
+        KNOWN_STARS.put("beta orion", rigel);
+        
+        // Procyon - Alpha Canis Minoris
+        StarInfo procyon = new StarInfo("Procyon", "Alpha Canis Minoris", new double[]{114.825494, 5.224993});
+        KNOWN_STARS.put("procyon", procyon);
+        KNOWN_STARS.put("alpha canis minoris", procyon);
+        KNOWN_STARS.put("alpha canis minor", procyon);
+        
+        // Altair - Alpha Aquilae
+        StarInfo altair = new StarInfo("Altair", "Alpha Aquilae", new double[]{297.695827, 8.868321});
+        KNOWN_STARS.put("altair", altair);
+        KNOWN_STARS.put("alpha aquilae", altair);
+        KNOWN_STARS.put("alpha aquila", altair);
+        
+        // Arcturus - Alpha Bootis
+        StarInfo arcturus = new StarInfo("Arcturus", "Alpha Bootis", new double[]{213.915300, 19.182409});
+        KNOWN_STARS.put("arcturus", arcturus);
+        KNOWN_STARS.put("alpha bootis", arcturus);
+        KNOWN_STARS.put("alpha bootes", arcturus);
+        
+        // Spica - Alpha Virginis
+        StarInfo spica = new StarInfo("Spica", "Alpha Virginis", new double[]{201.298247, -11.161319});
+        KNOWN_STARS.put("spica", spica);
+        KNOWN_STARS.put("alpha virginis", spica);
+        KNOWN_STARS.put("alpha virgo", spica);
+        
+        // Antares - Alpha Scorpii
+        StarInfo antares = new StarInfo("Antares", "Alpha Scorpii", new double[]{247.351915, -26.432002});
+        KNOWN_STARS.put("antares", antares);
+        KNOWN_STARS.put("alpha scorpii", antares);
+        KNOWN_STARS.put("alpha scorpio", antares);
+        
+        // Polaris - Alpha Ursae Minoris
+        StarInfo polaris = new StarInfo("Polaris", "Alpha Ursae Minoris", new double[]{37.954561, 89.264108});
+        KNOWN_STARS.put("polaris", polaris);
+        KNOWN_STARS.put("alpha ursae minoris", polaris);
+        KNOWN_STARS.put("north star", polaris);
+        KNOWN_STARS.put("pole star", polaris);
+        
+        // Capella - Alpha Aurigae
+        StarInfo capella = new StarInfo("Capella", "Alpha Aurigae", new double[]{79.172328, 45.997991});
+        KNOWN_STARS.put("capella", capella);
+        KNOWN_STARS.put("alpha aurigae", capella);
+        KNOWN_STARS.put("alpha auriga", capella);
+    }
+    
+    // Inner class to hold star information
+    private static class StarInfo {
+        private final String commonName;
+        private final String scientificName;
+        private final double[] coordinates;
+        
+        public StarInfo(String commonName, String scientificName, double[] coordinates) {
+            this.commonName = commonName;
+            this.scientificName = scientificName;
+            this.coordinates = coordinates;
+        }
+        
+        public String getCommonName() { return commonName; }
+        public String getScientificName() { return scientificName; }
+        public double[] getCoordinates() { return coordinates; }
     }
 
     public String queryGaia(double ra, double dec) {
@@ -65,11 +147,12 @@ public class GaiaService {
     public String queryGaiaByName(String name) {
         // First try to get coordinates from known stars
         String normalizedName = name.toLowerCase().trim();
-        double[] coords = KNOWN_STARS.get(normalizedName);
+        StarInfo starInfo = KNOWN_STARS.get(normalizedName);
         
-        if (coords != null) {
-            System.out.println("Found known star: " + name + " at coordinates: " + coords[0] + ", " + coords[1]);
-            return queryGaia(coords[0], coords[1]);
+        if (starInfo != null) {
+            System.out.println("Found known star: " + starInfo.getCommonName() + " (" + starInfo.getScientificName() + ") at coordinates: " + 
+                             starInfo.getCoordinates()[0] + ", " + starInfo.getCoordinates()[1]);
+            return queryGaia(starInfo.getCoordinates()[0], starInfo.getCoordinates()[1]);
         }
         
         // If not found in known stars, try SIMBAD first to get coordinates
