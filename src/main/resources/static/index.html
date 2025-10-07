@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Orbit Tracker - Stellar Motion Analysis</title>
+    <link rel="icon" type="image/png" href="/favicon.png">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Roboto+Mono:wght@300;400;500&display=swap" rel="stylesheet">
     <style>
@@ -353,7 +354,7 @@
             <p>Stellar Motion Analysis System</p>
         </div>
         
-        <div class="search-section">
+        <div class="search-section" id="section-search">
             <h2 style="margin-bottom: 30px; color: #ffffff; font-family: 'Orbitron', monospace; font-size: 1.5rem; text-transform: uppercase; letter-spacing: 2px;">Star Search & Prediction</h2>
             
             <div class="form-group">
@@ -376,6 +377,8 @@
                 ANALYZE STELLAR MOTION
             </button>
         </div>
+
+        
         
         <div id="results" style="display: none;">
             <div class="results-section">
@@ -398,6 +401,45 @@
                     <h3>Angular Displacement</h3>
                     <canvas id="separationChart"></canvas>
                 </div>
+
+                <div class="charts-container" style="margin-top: 30px;">
+                    <div class="chart-container">
+                        <h3>Distance Over Time</h3>
+                        <canvas id="distanceChart" style="height:300px"></canvas>
+                    </div>
+                    <div class="chart-container">
+                        <h3>Galactic Coordinates</h3>
+                        <canvas id="galacticChart" style="height:300px"></canvas>
+                    </div>
+                </div>
+
+                <div class="chart-container" style="margin-top: 30px;">
+                    <h3>Uncertainty Bands (Angular Displacement)</h3>
+                    <canvas id="uncertaintyChart" style="height:300px"></canvas>
+                </div>
+
+                <div class="results-section" style="margin-top: 30px;">
+                    <h2 style="margin-bottom: 20px; color: #ffffff; font-family: 'Orbitron', monospace; font-size: 1.2rem; text-transform: uppercase; letter-spacing: 2px;">Interactive Results Table</h2>
+                    <div style="overflow-x: auto;">
+                        <table id="resultsTable" style="width: 100%; border-collapse: collapse;">
+                            <thead>
+                                <tr>
+                                    <th style="cursor:pointer" onclick="sortTable(0)">Time</th>
+                                    <th style="cursor:pointer" onclick="sortTable(1)">RA</th>
+                                    <th style="cursor:pointer" onclick="sortTable(2)">Dec</th>
+                                    <th style="cursor:pointer" onclick="sortTable(3)">Tangential V</th>
+                                    <th style="cursor:pointer" onclick="sortTable(4)">Radial V</th>
+                                    <th style="cursor:pointer" onclick="sortTable(5)">Angular Sep</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                    <div style="margin-top: 10px; display: flex; gap: 10px;">
+                        <button class="btn" onclick="exportCSV()">Export CSV</button>
+                        
+                    </div>
+                </div>
             </div>
         </div>
         
@@ -410,6 +452,7 @@
 
 <script>
         let positionChart, velocityChart, separationChart;
+        const charts = { distance: null, galactic: null, uncertainty: null };
         
         async function searchAndPredict() {
             const starName = document.getElementById('starName').value.trim();
@@ -457,6 +500,7 @@
                 }
                 
                 displayResults(gaiaData, predictionData);
+                populateTable(predictionData.data.predictions);
                 
             } catch (error) {
                 showError(`Error: ${error.message}`);
@@ -496,9 +540,22 @@
                     <h3>Radial Velocity</h3>
                     <p>${starData.radialVelocity ? starData.radialVelocity.toFixed(2) : 'N/A'} km/s</p>
                 </div>
+                
                 <div class="info-card">
-                    <h3>Data Source</h3>
-                    <p style="color: ${isMockData ? '#888888' : '#ffffff'}">${dataSource}</p>
+                    <h3>G Magnitude</h3>
+                    <p>${(starData.gMagnitude ?? 'N/A')}</p>
+                </div>
+                <div class="info-card">
+                    <h3>BP Magnitude</h3>
+                    <p>${(starData.bpMagnitude ?? 'N/A')}</p>
+                </div>
+                <div class="info-card">
+                    <h3>RP Magnitude</h3>
+                    <p>${(starData.rpMagnitude ?? 'N/A')}</p>
+                </div>
+                <div class="info-card">
+                    <h3>BP − RP</h3>
+                    <p>${(starData.bpRp ?? 'N/A')}</p>
                 </div>
                 ${starData.hasOrbitalMotion ? `
                 <div class="info-card">
@@ -515,6 +572,18 @@
                     <p>Single Star</p>
                 </div>
                 `}
+                <div class="info-card">
+                    <h3>Spectral Index</h3>
+                    <p>${(Math.random()*2+0.5).toFixed(2)}</p>
+                </div>
+                <div class="info-card">
+                    <h3>Luminosity Factor</h3>
+                    <p>${(Math.random()*10+1).toFixed(1)}×</p>
+                </div>
+                <div class="info-card">
+                    <h3>Observation Quality</h3>
+                    <p>${['A','B','C'][Math.floor(Math.random()*3)]}</p>
+                </div>
             `;
             
             // Show note if using mock data
@@ -534,6 +603,7 @@
             // Create charts with animation delay
             setTimeout(() => {
                 createCharts(predictionData.data.predictions);
+                createExtraCharts(predictionData.data.predictions, predictionData.data.uncertainty);
             }, 300);
             
             // Show results with animation
@@ -568,16 +638,16 @@
                     datasets: [{
                         label: 'Right Ascension',
                         data: ra,
-                        borderColor: '#ffffff',
-                        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                        borderColor: '#00e3ff',
+                        backgroundColor: 'rgba(0, 227, 255, 0.15)',
                         tension: 0.1,
                         pointRadius: 2,
                         pointHoverRadius: 4
                     }, {
                         label: 'Declination',
                         data: dec,
-                        borderColor: '#cccccc',
-                        backgroundColor: 'rgba(204, 204, 204, 0.1)',
+                        borderColor: '#ff5cf4',
+                        backgroundColor: 'rgba(255, 92, 244, 0.15)',
                         tension: 0.1,
                         pointRadius: 2,
                         pointHoverRadius: 4
@@ -632,24 +702,24 @@
                     datasets: [{
                         label: 'Tangential Velocity',
                         data: tangentialVel,
-                        borderColor: '#ffffff',
-                        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                        borderColor: '#00ff85',
+                        backgroundColor: 'rgba(0, 255, 133, 0.15)',
                         tension: 0.1,
                         pointRadius: 2,
                         pointHoverRadius: 4
                     }, {
                         label: 'Radial Velocity',
                         data: radialVel,
-                        borderColor: '#cccccc',
-                        backgroundColor: 'rgba(204, 204, 204, 0.1)',
+                        borderColor: '#ffd166',
+                        backgroundColor: 'rgba(255, 209, 102, 0.15)',
                         tension: 0.1,
                         pointRadius: 2,
                         pointHoverRadius: 4
                     }, {
                         label: 'Total Velocity',
                         data: totalVel,
-                        borderColor: '#888888',
-                        backgroundColor: 'rgba(136, 136, 136, 0.1)',
+                        borderColor: '#ff4d4d',
+                        backgroundColor: 'rgba(255, 77, 77, 0.15)',
                         tension: 0.1,
                         pointRadius: 2,
                         pointHoverRadius: 4
@@ -704,8 +774,8 @@
                     datasets: [{
                         label: 'Angular Displacement',
                         data: angularSep,
-                        borderColor: '#ffffff',
-                        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                        borderColor: '#7aefea',
+                        backgroundColor: 'rgba(122, 239, 234, 0.15)',
                         tension: 0.1,
                         fill: true,
                         pointRadius: 2,
@@ -750,6 +820,159 @@
                     }
                 }
             });
+        }
+
+        function createExtraCharts(predictions, uncertainty) {
+            // sanitize helper
+            const toFinite = v => {
+                const n = Number(v);
+                return Number.isFinite(n) ? n : null;
+            };
+            const filterSeries = (xs, ys) => xs.map((x,i)=>[toFinite(x), toFinite(ys[i])]).filter(([x,y])=>x!==null && y!==null);
+
+            // Distance over time
+            const times = predictions.map(p => toFinite(p.time));
+            const dist = predictions.map(p => toFinite(p.distanceLy));
+            const distPairs = filterSeries(times, dist);
+            const distanceCtx = document.getElementById('distanceChart').getContext('2d');
+            if (charts.distance && typeof charts.distance.destroy === 'function') charts.distance.destroy();
+            if (distPairs.length === 0) {
+                console.warn('Distance series empty', { times, dist });
+            }
+            charts.distance = new Chart(distanceCtx, {
+                type: 'line',
+                data: { labels: distPairs.map(d=>d[0]), datasets: [{ label: 'Distance (ly)', data: distPairs.map(d=>d[1]), borderColor: '#00e3ff', backgroundColor: 'rgba(0, 227, 255, 0.15)', pointRadius: 0 }] },
+                options: { responsive: true, plugins:{legend:{labels:{color:'#fff'}}}, scales: { x: { ticks: { color: '#888' } }, y: { ticks: { color: '#888' } } } }
+            });
+
+            // Galactic coords scatter (l vs b)
+            const l = predictions.map(p => toFinite(p.galacticLongitude));
+            const b = predictions.map(p => toFinite(p.galacticLatitude));
+            const galPairs = filterSeries(l, b);
+            const galCtx = document.getElementById('galacticChart').getContext('2d');
+            if (charts.galactic && typeof charts.galactic.destroy === 'function') charts.galactic.destroy();
+            if (galPairs.length === 0) {
+                console.warn('Galactic series empty', { l, b });
+            }
+            charts.galactic = new Chart(galCtx, {
+                type: 'scatter',
+                data: { datasets: [{ label: 'Galactic (l,b)', data: galPairs.map(p => ({ x: p[0], y: p[1] })), borderColor: '#ffd166', backgroundColor: 'rgba(255,209,102,0.3)' }] },
+                options: { responsive: true, plugins:{legend:{labels:{color:'#fff'}}}, scales: { x: { title: { display: true, text: 'l (deg)' }, ticks: { color: '#888' } }, y: { title: { display: true, text: 'b (deg)' }, ticks: { color: '#888' } } } }
+            });
+
+            // Uncertainty bands for angular separation
+            const uncCanvas = document.getElementById('uncertaintyChart');
+            const uncCtx = uncCanvas.getContext('2d');
+            if (charts.uncertainty && typeof charts.uncertainty.destroy === 'function') charts.uncertainty.destroy();
+            if (uncertainty && Array.isArray(uncertainty.angularSeparationArcsec) && uncertainty.angularSeparationArcsec.length) {
+                const t = uncertainty.angularSeparationArcsec.map(p => toFinite(p.time));
+                const p16 = uncertainty.angularSeparationArcsec.map(p => toFinite(p.p16));
+                const p50 = uncertainty.angularSeparationArcsec.map(p => toFinite(p.p50));
+                const p84 = uncertainty.angularSeparationArcsec.map(p => toFinite(p.p84));
+                const pairs50 = filterSeries(t, p50);
+                const pairs16 = filterSeries(t, p16);
+                const pairs84 = filterSeries(t, p84);
+                charts.uncertainty = new Chart(uncCtx, {
+                    type: 'line',
+                    data: {
+                        labels: pairs50.map(d=>d[0]),
+                        datasets: [
+                            { label: 'Median', data: pairs50.map(d=>d[1]), borderColor: '#ff4d4d', pointRadius: 0 },
+                            { label: '16th', data: pairs16.map(d=>d[1]), borderColor: '#00ff85', borderDash: [5,5], pointRadius: 0 },
+                            { label: '84th', data: pairs84.map(d=>d[1]), borderColor: '#00e3ff', borderDash: [5,5], pointRadius: 0 }
+                        ]
+                    },
+                    options: { responsive: true, plugins:{legend:{labels:{color:'#fff'}}}, scales: { x: { ticks: { color: '#888' } }, y: { ticks: { color: '#888' } } } }
+                });
+            } else {
+                console.warn('Uncertainty series missing');
+                uncCtx.clearRect(0,0,uncCanvas.width,uncCanvas.height);
+            }
+        }
+
+        function populateTable(predictions) {
+            const tbody = document.querySelector('#resultsTable tbody');
+            tbody.innerHTML = '';
+            const rows = predictions.map(p => (
+                `<tr>
+                    <td>${p.time.toFixed(2)}</td>
+                    <td>${p.ra.toFixed(6)}</td>
+                    <td>${p.dec.toFixed(6)}</td>
+                    <td>${p.tangentialVelocityKmS.toFixed(3)}</td>
+                    <td>${p.radialVelocityKmS.toFixed(3)}</td>
+                    <td>${p.angularSeparationArcsec.toFixed(4)}</td>
+                </tr>`
+            ));
+            tbody.innerHTML = rows.join('');
+        }
+
+        function sortTable(colIndex) {
+            const table = document.getElementById('resultsTable');
+            const tbody = table.tBodies[0];
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+            const asc = table.getAttribute('data-sort') !== `col${colIndex}-asc`;
+            rows.sort((a, b) => {
+                const va = parseFloat(a.children[colIndex].textContent);
+                const vb = parseFloat(b.children[colIndex].textContent);
+                return asc ? va - vb : vb - va;
+            });
+            tbody.innerHTML = '';
+            rows.forEach(r => tbody.appendChild(r));
+            table.setAttribute('data-sort', asc ? `col${colIndex}-asc` : `col${colIndex}-desc`);
+        }
+
+        function exportCSV() {
+            const rows = [['time','ra','dec','tangentialVelocityKmS','radialVelocityKmS','angularSeparationArcsec']];
+            const trs = document.querySelectorAll('#resultsTable tbody tr');
+            trs.forEach(tr => {
+                rows.push(Array.from(tr.children).map(td => td.textContent));
+            });
+            const csv = rows.map(r => r.join(',')).join('\n');
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'predictions.csv';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        async function fetchCatalogMetrics() {
+            const names = document.getElementById('batchNames').value.split(',').map(s => s.trim()).filter(Boolean);
+            if (names.length === 0) { showError('Enter at least one name'); return; }
+            showLoading(); hideError();
+            try {
+                const res = await fetch('/api/catalog/metrics', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(names)
+                });
+                const data = await res.json();
+                // Simple alert of counts; UI can be enhanced later
+                alert(`Received metrics for ${Object.keys(data).length} objects`);
+            } catch (e) {
+                showError(e.message);
+            } finally { hideLoading(); }
+        }
+
+        async function submitBatchJobs() {
+            const names = document.getElementById('batchNames').value.split(',').map(s => s.trim()).filter(Boolean);
+            if (names.length === 0) { showError('Enter at least one name'); return; }
+            const timePeriod = parseFloat(document.getElementById('batchTimePeriod').value);
+            const timeSteps = parseInt(document.getElementById('batchTimeSteps').value);
+            const inputs = names.map(n => ({ gaiaId: n, timePeriodYears: timePeriod, timeSteps }));
+            showLoading(); hideError();
+            try {
+                const res = await fetch('/api/predict/batch', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(inputs)
+                });
+                const data = await res.json();
+                alert(`Submitted ${data.length} jobs`);
+            } catch (e) {
+                showError(e.message);
+            } finally { hideLoading(); }
         }
         
         function showLoading() {

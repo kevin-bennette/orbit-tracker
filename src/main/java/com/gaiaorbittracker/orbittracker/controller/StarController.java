@@ -89,6 +89,59 @@ public class StarController {
         }
     }
 
+    @GetMapping("/star/rv-diagram")
+    public ResponseEntity<Map<String, Object>> getRadialVelocityDiagram(@RequestParam String name,
+                                                                        @RequestParam(required = false, defaultValue = "100") int years,
+                                                                        @RequestParam(required = false, defaultValue = "50") int steps) {
+        try {
+            Map<String, Object> metrics = gaiaService.getStarMetricsByName(name);
+            if (metrics.containsKey("error")) return ResponseEntity.badRequest().body(metrics);
+
+            StarInput input = new StarInput();
+            input.setGaiaId(name);
+            input.setTimePeriodYears((double) years);
+            input.setTimeSteps(steps);
+            PredictionResultDto prediction = orbitalCalculator.computePrediction(input, null);
+            @SuppressWarnings("unchecked")
+            var preds = (java.util.List<java.util.Map<String, Object>>) prediction.getData().get("predictions");
+
+            java.util.List<Double> t = new java.util.ArrayList<>();
+            java.util.List<Double> rv = new java.util.ArrayList<>();
+            for (var p : preds) {
+                t.add(((Number)p.get("time")).doubleValue());
+                rv.add(((Number)p.get("radialVelocityKmS")).doubleValue());
+            }
+            return ResponseEntity.ok(Map.of(
+                "name", name,
+                "time", t,
+                "radialVelocityKmS", rv
+            ));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @GetMapping("/star/photometry")
+    public ResponseEntity<Map<String, Object>> getPhotometry(@RequestParam String name) {
+        try {
+            Map<String, Object> metrics = gaiaService.getStarMetricsByName(name);
+            if (metrics.containsKey("error")) return ResponseEntity.badRequest().body(metrics);
+            Double g = (Double) metrics.get("gMagnitude");
+            Double bp = (Double) metrics.get("bpMagnitude");
+            Double rp = (Double) metrics.get("rpMagnitude");
+            Double bpRp = (Double) metrics.get("bpRp");
+            Map<String, Object> out = new java.util.HashMap<>();
+            out.put("name", name);
+            out.put("G", g);
+            out.put("BP", bp);
+            out.put("RP", rp);
+            out.put("BP_RP", bpRp);
+            return ResponseEntity.ok(out);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
     @GetMapping("/test/sirius")
     public ResponseEntity<Map<String, Object>> testSirius() {
         try {

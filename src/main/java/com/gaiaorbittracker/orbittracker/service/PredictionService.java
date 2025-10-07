@@ -32,7 +32,8 @@ public class PredictionService {
 
     @PostConstruct
     public void init() {
-        this.executor = Executors.newFixedThreadPool(2);
+        int pool = Integer.parseInt(System.getProperty("prediction.pool.size", "4"));
+        this.executor = Executors.newFixedThreadPool(pool);
     }
 
     public UUID submitJob(StarInput input) {

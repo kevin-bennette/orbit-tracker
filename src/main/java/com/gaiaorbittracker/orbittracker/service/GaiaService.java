@@ -11,6 +11,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.List;
 
 @Service
 public class GaiaService {
@@ -121,8 +122,13 @@ public class GaiaService {
     public String queryGaia(double ra, double dec) {
         try {
             String adql = String.format(
-                    "SELECT TOP 1 source_id, ra, dec, parallax, pmra, pmdec, radial_velocity, " +
-                    "phot_g_mean_mag, bp_rp, teff_gspphot, logg_gspphot, " +
+                    "SELECT TOP 1 " +
+                    "source_id, ra, dec, " +
+                    "parallax, parallax_error, " +
+                    "pmra, pmra_error, pmdec, pmdec_error, " +
+                    "radial_velocity, radial_velocity_error, " +
+                    "phot_g_mean_mag, phot_bp_mean_mag, phot_rp_mean_mag, bp_rp, " +
+                    "teff_gspphot, logg_gspphot, " +
                     "astrometric_excess_noise, astrometric_excess_noise_sig " +
                     "FROM gaiadr3.gaia_source " +
                     "WHERE 1=CONTAINS(POINT('ICRS', ra, dec), CIRCLE('ICRS', %f, %f, 0.1)) " +
@@ -259,13 +265,21 @@ public class GaiaService {
             if (root.isEmpty()) return Map.of("error", "Star not found");
         
             JsonNode star = root.get(0);
-        
+
+            // Column mapping must match query above
+            // 0: source_id, 1: ra, 2: dec, 3: parallax, 4: parallax_error,
+            // 5: pmra, 6: pmra_error, 7: pmdec, 8: pmdec_error,
+            // 9: radial_velocity, 10: radial_velocity_error,
+            // 11: phot_g_mean_mag, 12: phot_bp_mean_mag, 13: phot_rp_mean_mag, 14: bp_rp,
+            // 15: teff_gspphot, 16: logg_gspphot,
+            // 17: astrometric_excess_noise, 18: astrometric_excess_noise_sig
+
             double parallax = star.get(3).asDouble(); // parallax in mas
             double distance_pc = 1000.0 / parallax; // Gaia gives parallax in mas
             double distance_ly = distance_pc * 3.26156;
         
-            double pmra = star.get(4).asDouble();
-            double pmdec = star.get(5).asDouble();
+            double pmra = star.get(5).asDouble();
+            double pmdec = star.get(7).asDouble();
             double totalProperMotion = Math.sqrt(pmra*pmra + pmdec*pmdec);
         
             Map<String, Object> metrics = new HashMap<>();
@@ -273,15 +287,21 @@ public class GaiaService {
             metrics.put("ra", star.get(1).asDouble());
             metrics.put("dec", star.get(2).asDouble());
             metrics.put("parallax", parallax);
+            metrics.put("parallaxError", star.get(4).isNull() ? null : star.get(4).asDouble());
             metrics.put("pmra", pmra);
+            metrics.put("pmraError", star.get(6).isNull() ? null : star.get(6).asDouble());
             metrics.put("pmdec", pmdec);
-            metrics.put("radialVelocity", star.get(6).isNull() ? null : star.get(6).asDouble());
+            metrics.put("pmdecError", star.get(8).isNull() ? null : star.get(8).asDouble());
+            metrics.put("radialVelocity", star.get(9).isNull() ? null : star.get(9).asDouble());
+            metrics.put("radialVelocityError", star.get(10).isNull() ? null : star.get(10).asDouble());
             metrics.put("distanceLy", distance_ly);
             metrics.put("totalProperMotion", totalProperMotion);
-            metrics.put("gMagnitude", star.get(7).isNull() ? null : star.get(7).asDouble());
-            metrics.put("bpRp", star.get(8).isNull() ? null : star.get(8).asDouble());
-            metrics.put("teff", star.get(9).isNull() ? null : star.get(9).asDouble());
-            metrics.put("logg", star.get(10).isNull() ? null : star.get(10).asDouble());
+            metrics.put("gMagnitude", star.get(11).isNull() ? null : star.get(11).asDouble());
+            metrics.put("bpMagnitude", star.get(12).isNull() ? null : star.get(12).asDouble());
+            metrics.put("rpMagnitude", star.get(13).isNull() ? null : star.get(13).asDouble());
+            metrics.put("bpRp", star.get(14).isNull() ? null : star.get(14).asDouble());
+            metrics.put("teff", star.get(15).isNull() ? null : star.get(15).asDouble());
+            metrics.put("logg", star.get(16).isNull() ? null : star.get(16).asDouble());
         
             return metrics;
         } catch (Exception e) {
@@ -314,10 +334,11 @@ public class GaiaService {
             }
         
             JsonNode star = root.get(0);
+            // See column mapping comment in getStarMetrics
             double parallax = star.get(3).asDouble();
             double distance_ly = 1000.0 / parallax * 3.26156;
-            double pmra = star.get(4).asDouble();
-            double pmdec = star.get(5).asDouble();
+            double pmra = star.get(5).asDouble();
+            double pmdec = star.get(7).asDouble();
             double totalProperMotion = Math.sqrt(pmra*pmra + pmdec*pmdec);
         
             Map<String, Object> metrics = new HashMap<>();
@@ -326,15 +347,21 @@ public class GaiaService {
             metrics.put("ra", star.get(1).asDouble());
             metrics.put("dec", star.get(2).asDouble());
             metrics.put("parallax", parallax);
+            metrics.put("parallaxError", star.get(4).isNull() ? null : star.get(4).asDouble());
             metrics.put("pmra", pmra);
+            metrics.put("pmraError", star.get(6).isNull() ? null : star.get(6).asDouble());
             metrics.put("pmdec", pmdec);
-            metrics.put("radialVelocity", star.get(6).isNull() ? null : star.get(6).asDouble());
+            metrics.put("pmdecError", star.get(8).isNull() ? null : star.get(8).asDouble());
+            metrics.put("radialVelocity", star.get(9).isNull() ? null : star.get(9).asDouble());
+            metrics.put("radialVelocityError", star.get(10).isNull() ? null : star.get(10).asDouble());
             metrics.put("distanceLy", distance_ly);
             metrics.put("totalProperMotion", totalProperMotion);
-            metrics.put("gMagnitude", star.get(7).isNull() ? null : star.get(7).asDouble());
-            metrics.put("bpRp", star.get(8).isNull() ? null : star.get(8).asDouble());
-            metrics.put("teff", star.get(9).isNull() ? null : star.get(9).asDouble());
-            metrics.put("logg", star.get(10).isNull() ? null : star.get(10).asDouble());
+            metrics.put("gMagnitude", star.get(11).isNull() ? null : star.get(11).asDouble());
+            metrics.put("bpMagnitude", star.get(12).isNull() ? null : star.get(12).asDouble());
+            metrics.put("rpMagnitude", star.get(13).isNull() ? null : star.get(13).asDouble());
+            metrics.put("bpRp", star.get(14).isNull() ? null : star.get(14).asDouble());
+            metrics.put("teff", star.get(15).isNull() ? null : star.get(15).asDouble());
+            metrics.put("logg", star.get(16).isNull() ? null : star.get(16).asDouble());
             metrics.put("isMockData", false);
         
             return metrics;
@@ -348,6 +375,14 @@ public class GaiaService {
             }
             return Map.of("error", "Failed to fetch star metrics: " + e.getMessage());
         }
+    }
+
+    public Map<String, Map<String, Object>> getStarMetricsByNames(List<String> names) {
+        Map<String, Map<String, Object>> out = new HashMap<>();
+        for (String n : names) {
+            out.put(n, getStarMetricsByName(n));
+        }
+        return out;
     }
 
 

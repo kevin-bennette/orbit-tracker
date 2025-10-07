@@ -51,6 +51,9 @@ public class OrbitalCalculator {
 
         // Calculate orbital predictions
         List<Map<String, Object>> predictions = calculateOrbitalMotion(starData, timePeriodYears, timeSteps);
+
+        // If we have Gaia uncertainties, run Monte Carlo to estimate uncertainty bands
+        Map<String, Object> uncertaintyBands = calculateUncertaintyBands(starData, timePeriodYears, timeSteps, 200);
         
         // Calculate summary statistics
         Map<String, Object> summary = calculateSummaryStats(predictions, starData);
@@ -59,6 +62,9 @@ public class OrbitalCalculator {
         result.put("starData", starData);
         result.put("predictions", predictions);
         result.put("summary", summary);
+        if (!uncertaintyBands.isEmpty()) {
+            result.put("uncertainty", uncertaintyBands);
+        }
         result.put("timePeriodYears", timePeriodYears);
         result.put("timeSteps", timeSteps);
 
@@ -67,6 +73,141 @@ public class OrbitalCalculator {
             timePeriodYears, timeSteps);
 
         return new PredictionResultDto(summaryText, result);
+    }
+
+    private Map<String, Object> calculateUncertaintyBands(Map<String, Object> nominalStarData,
+                                                         double timePeriodYears,
+                                                         int timeSteps,
+                                                         int numSamples) {
+        Map<String, Object> bands = new HashMap<>();
+
+        // Extract uncertainties if present
+        Double parallaxErr = asDouble(nominalStarData.get("parallaxError"));
+        Double pmraErr = asDouble(nominalStarData.get("pmraError"));
+        Double pmdecErr = asDouble(nominalStarData.get("pmdecError"));
+        Double rvErr = asDouble(nominalStarData.get("radialVelocityError"));
+
+        // Provide sensible defaults if Gaia uncertainties are unavailable so charts can render
+        Double parallaxVal = asDouble(nominalStarData.get("parallax"));
+        Double pmraVal = asDouble(nominalStarData.get("pmra"));
+        Double pmdecVal = asDouble(nominalStarData.get("pmdec"));
+        Double rvVal = asDouble(nominalStarData.get("radialVelocity"));
+
+        if (parallaxErr == null && parallaxVal != null) {
+            parallaxErr = Math.max(0.05 * Math.abs(parallaxVal), 0.01); // 5% or 0.01 mas
+        }
+        if (pmraErr == null && pmraVal != null) {
+            pmraErr = Math.max(0.05 * Math.abs(pmraVal), 0.1); // 5% or 0.1 mas/yr
+        }
+        if (pmdecErr == null && pmdecVal != null) {
+            pmdecErr = Math.max(0.05 * Math.abs(pmdecVal), 0.1);
+        }
+        if (rvErr == null && rvVal != null) {
+            rvErr = Math.max(0.1 * Math.abs(rvVal), 0.5); // 10% or 0.5 km/s
+        }
+
+        if (parallaxErr == null && pmraErr == null && pmdecErr == null && rvErr == null) {
+            return bands; // still nothing to vary on
+        }
+
+        Random random = new Random(42);
+
+        // Storage for each timestep across samples
+        List<Double> raSamples, decSamples, sepSamples;
+        List<List<Double>> raByT = new ArrayList<>(timeSteps + 1);
+        List<List<Double>> decByT = new ArrayList<>(timeSteps + 1);
+        List<List<Double>> sepByT = new ArrayList<>(timeSteps + 1);
+        for (int i = 0; i <= timeSteps; i++) {
+            raByT.add(new ArrayList<>());
+            decByT.add(new ArrayList<>());
+            sepByT.add(new ArrayList<>());
+        }
+
+        // Nominal for separation baseline
+        List<Map<String, Object>> nominal = calculateOrbitalMotion(nominalStarData, timePeriodYears, timeSteps);
+
+        for (int s = 0; s < numSamples; s++) {
+            Map<String, Object> sampled = new HashMap<>(nominalStarData);
+            // Gaussian draws (independent; covariance ignored for simplicity)
+            if (parallaxErr != null) sampled.put("parallax",
+                    ((Double) nominalStarData.get("parallax")) + random.nextGaussian() * parallaxErr);
+            if (pmraErr != null) sampled.put("pmra",
+                    ((Double) nominalStarData.get("pmra")) + random.nextGaussian() * pmraErr);
+            if (pmdecErr != null) sampled.put("pmdec",
+                    ((Double) nominalStarData.get("pmdec")) + random.nextGaussian() * pmdecErr);
+            if (rvErr != null && nominalStarData.get("radialVelocity") != null) sampled.put("radialVelocity",
+                    ((Double) nominalStarData.get("radialVelocity")) + random.nextGaussian() * rvErr);
+
+            try {
+                List<Map<String, Object>> path = calculateOrbitalMotion(sampled, timePeriodYears, timeSteps);
+                for (int i = 0; i <= timeSteps; i++) {
+                    Map<String, Object> p = path.get(i);
+                    Map<String, Object> pNom = nominal.get(i);
+                    raByT.get(i).add((Double) p.get("ra"));
+                    decByT.get(i).add((Double) p.get("dec"));
+                    // Angular separation vs nominal at same time
+                    double sep = Math.toDegrees(calculateAngularSeparation(
+                        (Double) pNom.get("ra"), (Double) pNom.get("dec"),
+                        (Double) p.get("ra"), (Double) p.get("dec")
+                    )) * 3600.0;
+                    sepByT.get(i).add(sep);
+                }
+            } catch (Exception ignore) {
+                // If a sample is invalid (e.g., negative parallax), skip
+            }
+        }
+
+        // Compute percentiles for each time step
+        List<Map<String, Object>> raBands = new ArrayList<>();
+        List<Map<String, Object>> decBands = new ArrayList<>();
+        List<Map<String, Object>> sepBands = new ArrayList<>();
+        double dt = timePeriodYears / timeSteps;
+        for (int i = 0; i <= timeSteps; i++) {
+            double t = i * dt;
+            raSamples = raByT.get(i);
+            decSamples = decByT.get(i);
+            sepSamples = sepByT.get(i);
+            if (raSamples.isEmpty()) continue;
+            raBands.add(Map.of(
+                "time", t,
+                "p16", percentile(raSamples, 16),
+                "p50", percentile(raSamples, 50),
+                "p84", percentile(raSamples, 84)
+            ));
+            decBands.add(Map.of(
+                "time", t,
+                "p16", percentile(decSamples, 16),
+                "p50", percentile(decSamples, 50),
+                "p84", percentile(decSamples, 84)
+            ));
+            sepBands.add(Map.of(
+                "time", t,
+                "p16", percentile(sepSamples, 16),
+                "p50", percentile(sepSamples, 50),
+                "p84", percentile(sepSamples, 84)
+            ));
+        }
+
+        bands.put("ra", raBands);
+        bands.put("dec", decBands);
+        bands.put("angularSeparationArcsec", sepBands);
+        bands.put("samples", numSamples);
+        return bands;
+    }
+
+    private static Double asDouble(Object v) {
+        return v instanceof Number ? ((Number) v).doubleValue() : null;
+    }
+
+    private static double percentile(List<Double> values, int pct) {
+        if (values.isEmpty()) return Double.NaN;
+        Collections.sort(values);
+        double rank = (pct / 100.0) * (values.size() - 1);
+        int lo = (int) Math.floor(rank);
+        int hi = (int) Math.ceil(rank);
+        if (lo == hi) return values.get(lo);
+        double w = rank - lo;
+        return values.get(lo) * (1 - w) + values.get(hi) * w;
     }
 
     private void validateStarData(Map<String, Object> starData) throws Exception {
@@ -177,8 +318,14 @@ public class OrbitalCalculator {
             prediction.put("hasOrbitalMotion", hasOrbitalMotion);
             prediction.put("orbitalPeriod", orbitalPeriod);
             
-            // Add solar system relative positions
-            prediction.putAll(solarSystemPosition);
+            // Add solar system relative positions (ensure numeric types)
+            prediction.put("xParsecs", solarSystemPosition.get("xParsecs"));
+            prediction.put("yParsecs", solarSystemPosition.get("yParsecs"));
+            prediction.put("zParsecs", solarSystemPosition.get("zParsecs"));
+            prediction.put("distanceFromSunPc", solarSystemPosition.get("distanceFromSunPc"));
+            prediction.put("distanceFromSunLy", solarSystemPosition.get("distanceFromSunLy"));
+            prediction.put("galacticLongitude", solarSystemPosition.get("galacticLongitude"));
+            prediction.put("galacticLatitude", solarSystemPosition.get("galacticLatitude"));
             
             predictions.add(prediction);
         }
