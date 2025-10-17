@@ -13,7 +13,7 @@ Orbit Tracker is a Spring Boot application that extracts stellar parameters from
 ## Quick Start
 
 Prerequisites
-- Java 17+
+- Java 21
 - Maven 3.6+
 
 Build and run
