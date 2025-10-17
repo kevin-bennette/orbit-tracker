@@ -80,6 +80,8 @@ Backend
 Frontend
 - Static HTML/JS served from `src/main/resources/static` with Chart.js for visualization.
 - Single page: `index.html`.
+<img width="1919" height="921" alt="image" src="https://github.com/user-attachments/assets/283d1fc8-b847-49cf-b688-14ebdb01b1b4" />
+<img width="832" height="839" alt="image" src="https://github.com/user-attachments/assets/f9bb0708-61f5-4b0e-810a-a360b97435d1" />
 
 Configuration
 ```properties
