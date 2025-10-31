@@ -131,7 +131,7 @@ public class GaiaService {
                     "teff_gspphot, logg_gspphot, " +
                     "astrometric_excess_noise, astrometric_excess_noise_sig " +
                     "FROM gaiadr3.gaia_source " +
-                    "WHERE 1=CONTAINS(POINT('ICRS', ra, dec), CIRCLE('ICRS', %f, %f, 0.1)) " +
+                    "WHERE 1=CONTAINS(POINT('ICRS', ra, dec), CIRCLE('ICRS', %f, %f, 0.5)) " +
                     "AND parallax > 0 AND parallax IS NOT NULL " +
                     "ORDER BY phot_g_mean_mag ASC",
                     ra, dec
@@ -153,6 +153,13 @@ public class GaiaService {
     public String queryGaiaByName(String name) {
         // First try to get coordinates from known stars
         String normalizedName = name.toLowerCase().trim();
+        // If looks like a GAIA source_id, query by id directly
+        if (isNumeric(normalizedName)) {
+            try {
+                long sourceId = Long.parseLong(normalizedName);
+                return queryGaiaBySourceId(sourceId);
+            } catch (Exception ignore) { /* fall through */ }
+        }
         StarInfo starInfo = KNOWN_STARS.get(normalizedName);
         
         if (starInfo != null) {
@@ -175,6 +182,36 @@ public class GaiaService {
         }
         
         return "{\"error\":\"Star not found in known catalog or SIMBAD\"}";
+    }
+
+    private String queryGaiaBySourceId(long sourceId) {
+        try {
+            String adql = String.format(
+                "SELECT " +
+                "source_id, ra, dec, " +
+                "parallax, parallax_error, " +
+                "pmra, pmra_error, pmdec, pmdec_error, " +
+                "radial_velocity, radial_velocity_error, " +
+                "phot_g_mean_mag, phot_bp_mean_mag, phot_rp_mean_mag, bp_rp, " +
+                "teff_gspphot, logg_gspphot, " +
+                "astrometric_excess_noise, astrometric_excess_noise_sig " +
+                "FROM gaiadr3.gaia_source WHERE source_id=%d",
+                sourceId
+            );
+            String url = GAIA_TAP_URL + "?REQUEST=doQuery&LANG=ADQL&FORMAT=json&QUERY=" +
+                         UriUtils.encode(adql, StandardCharsets.UTF_8);
+            return restTemplate.getForObject(url, String.class);
+        } catch (Exception e) {
+            return "{\"error\":\"Failed to fetch Gaia by source_id: " + e.getMessage().replace("\"", "") + "\"}";
+        }
+    }
+
+    private boolean isNumeric(String s) {
+        if (s == null || s.isEmpty()) return false;
+        for (int i = 0; i < s.length(); i++) {
+            if (!Character.isDigit(s.charAt(i))) return false;
+        }
+        return true;
     }
     
     private Map<String, Object> getSimbadCoordinates(String name) {
@@ -324,8 +361,8 @@ public class GaiaService {
             }
             
             ObjectMapper mapper = new ObjectMapper();
-            JsonNode root = mapper.readTree(json).get("data");
-            if (root.isEmpty()) {
+            JsonNode dataNode = mapper.readTree(json).get("data");
+            if (dataNode == null || !dataNode.isArray() || dataNode.isEmpty()) {
                 // Try fallback service
                 if (fallbackService.hasMockData(name)) {
                     return fallbackService.getMockStarData(name);
@@ -333,7 +370,7 @@ public class GaiaService {
                 return Map.of("error", "Star not found in Gaia");
             }
         
-            JsonNode star = root.get(0);
+            JsonNode star = dataNode.get(0);
             // See column mapping comment in getStarMetrics
             double parallax = star.get(3).asDouble();
             double distance_ly = 1000.0 / parallax * 3.26156;
@@ -363,6 +400,7 @@ public class GaiaService {
             metrics.put("teff", star.get(15).isNull() ? null : star.get(15).asDouble());
             metrics.put("logg", star.get(16).isNull() ? null : star.get(16).asDouble());
             metrics.put("isMockData", false);
+            metrics.put("dataSource", "GAIA");
         
             return metrics;
         
@@ -371,9 +409,46 @@ public class GaiaService {
             System.out.println("Exception in getStarMetricsByName, trying fallback for: " + name);
             // Try fallback service
             if (fallbackService.hasMockData(name)) {
-                return fallbackService.getMockStarData(name);
+                Map<String, Object> data = fallbackService.getMockStarData(name);
+                data.put("dataSource", "FALLBACK");
+                return data;
             }
             return Map.of("error", "Failed to fetch star metrics: " + e.getMessage());
+        }
+    }
+
+    public Map<String, Object> getStarMetricsBySourceId(long sourceId) {
+        try {
+            String json = queryGaiaBySourceId(sourceId);
+            if (json.contains("\"error\"")) {
+                return Map.of("error", "Gaia source_id not found: " + sourceId);
+            }
+            ObjectMapper mapper = new ObjectMapper();
+            JsonNode dataNode = mapper.readTree(json).get("data");
+            if (dataNode == null || !dataNode.isArray() || dataNode.isEmpty()) {
+                return Map.of("error", "Gaia source_id not found: " + sourceId);
+            }
+            JsonNode star = dataNode.get(0);
+            double parallax = star.get(3).asDouble();
+            double distance_ly = 1000.0 / parallax * 3.26156;
+            double pmra = star.get(5).asDouble();
+            double pmdec = star.get(7).asDouble();
+            double totalProperMotion = Math.sqrt(pmra*pmra + pmdec*pmdec);
+            Map<String, Object> metrics = new HashMap<>();
+            metrics.put("sourceId", star.get(0).asLong());
+            metrics.put("ra", star.get(1).asDouble());
+            metrics.put("dec", star.get(2).asDouble());
+            metrics.put("parallax", parallax);
+            metrics.put("pmra", pmra);
+            metrics.put("pmdec", pmdec);
+            metrics.put("radialVelocity", star.get(9).isNull() ? null : star.get(9).asDouble());
+            metrics.put("distanceLy", distance_ly);
+            metrics.put("totalProperMotion", totalProperMotion);
+            metrics.put("isMockData", false);
+            metrics.put("dataSource", "GAIA");
+            return metrics;
+        } catch (Exception e) {
+            return Map.of("error", "Failed to fetch Gaia metrics: " + e.getMessage());
         }
     }
 

@@ -34,6 +34,7 @@ public class FallbackStarService {
             result.put("teff", orbit.getTeff());
             result.put("logg", orbit.getLogg());
             result.put("isMockData", true);
+            result.put("dataSource", "FALLBACK");
             result.put("hasOrbitalMotion", orbit.hasOrbitalMotion());
             result.put("orbitalPeriod", orbit.getOrbitalPeriod());
             result.put("eccentricity", orbit.getEccentricity());

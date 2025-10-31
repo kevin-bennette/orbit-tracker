@@ -15,6 +15,7 @@ public class StarInput {
     private Double radialVelocity;
     private Double timePeriodYears; // Time period for prediction in years
     private Integer timeSteps; // Number of time steps for detailed prediction
+    private Boolean highFidelity; // Use Newtonian backend
 
     public StarInput() {}
 
@@ -45,4 +46,7 @@ public class StarInput {
 
     public Integer getTimeSteps() { return timeSteps; }
     public void setTimeSteps(Integer timeSteps) { this.timeSteps = timeSteps; }
+
+    public Boolean getHighFidelity() { return highFidelity; }
+    public void setHighFidelity(Boolean highFidelity) { this.highFidelity = highFidelity; }
 }

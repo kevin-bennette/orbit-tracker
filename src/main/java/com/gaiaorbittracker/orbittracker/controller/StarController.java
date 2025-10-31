@@ -62,6 +62,19 @@ public class StarController {
         }
     }
 
+    @GetMapping("/star/gaiaId")
+    public ResponseEntity<Map<String, Object>> getStarFromGaiaById(@RequestParam("sourceId") long sourceId) {
+        try {
+            Map<String, Object> result = gaiaService.getStarMetricsBySourceId(sourceId);
+            if (result.containsKey("error")) {
+                return ResponseEntity.badRequest().body(result);
+            }
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
     @GetMapping("/star/coordinates")
     public ResponseEntity<Map<String, Object>> getStarByCoordinates(
             @RequestParam double ra, 

@@ -15,6 +15,8 @@ public class OrbitalCalculator {
 
     @Autowired
     private GaiaService gaiaService;
+    @Autowired
+    private NewtonianPhysics newtonian;
 
     // Constants
     private static final double AU_TO_PC = 4.8481368e-6; // Astronomical units to parsecs
@@ -50,13 +52,36 @@ public class OrbitalCalculator {
         int timeSteps = input.getTimeSteps() != null ? input.getTimeSteps() : 50;
 
         // Calculate orbital predictions
-        List<Map<String, Object>> predictions = calculateOrbitalMotion(starData, timePeriodYears, timeSteps);
+        // Default to high fidelity when not specified
+        boolean highFidelity = (input.getHighFidelity() == null) || Boolean.TRUE.equals(input.getHighFidelity());
+        List<Map<String, Object>> predictions = highFidelity
+            ? calculateOrbitalMotionHighFidelity(starData, timePeriodYears, timeSteps)
+            : calculateOrbitalMotion(starData, timePeriodYears, timeSteps);
 
         // If we have Gaia uncertainties, run Monte Carlo to estimate uncertainty bands
         Map<String, Object> uncertaintyBands = calculateUncertaintyBands(starData, timePeriodYears, timeSteps, 200);
         
         // Calculate summary statistics
         Map<String, Object> summary = calculateSummaryStats(predictions, starData);
+
+        // Debug info: compare Gaia vs predicted initial, and selected mode
+        Map<String, Object> debug = new HashMap<>();
+        debug.put("mode", highFidelity ? "high_fidelity" : "standard");
+        debug.put("gaiaRa", starData.get("ra"));
+        debug.put("gaiaDec", starData.get("dec"));
+        if (!predictions.isEmpty()) {
+            Map<String, Object> first = predictions.get(0);
+            Map<String, Object> last = predictions.get(predictions.size() - 1);
+            debug.put("predInitialRa", first.get("ra"));
+            debug.put("predInitialDec", first.get("dec"));
+            debug.put("predFinalRa", last.get("ra"));
+            debug.put("predFinalDec", last.get("dec"));
+            try {
+                double dRa = Math.abs(((Number)first.get("ra")).doubleValue() - ((Number)starData.get("ra")).doubleValue());
+                double dDec = Math.abs(((Number)first.get("dec")).doubleValue() - ((Number)starData.get("dec")).doubleValue());
+                debug.put("initialMismatchArcsec", Math.sqrt(dRa*dRa + dDec*dDec) * 3600.0);
+            } catch (Exception ignore) { /* best effort */ }
+        }
 
         Map<String, Object> result = new HashMap<>();
         result.put("starData", starData);
@@ -67,12 +92,186 @@ public class OrbitalCalculator {
         }
         result.put("timePeriodYears", timePeriodYears);
         result.put("timeSteps", timeSteps);
+        result.put("debug", debug);
 
         String summaryText = String.format("Orbital prediction for %s over %.1f years with %d time steps", 
             input.getGaiaId() != null ? input.getGaiaId() : "provided coordinates", 
             timePeriodYears, timeSteps);
 
         return new PredictionResultDto(summaryText, result);
+    }
+
+    private List<Map<String, Object>> calculateOrbitalMotionHighFidelity(Map<String, Object> starData,
+                                                                         double timePeriodYears,
+                                                                         int timeSteps) throws Exception {
+        List<Map<String, Object>> out = new ArrayList<>();
+
+        // If this star has explicit orbital parameters (binary), honor those first
+        boolean hasOrbitalMotion = starData.containsKey("hasOrbitalMotion") &&
+                                   Boolean.TRUE.equals(starData.get("hasOrbitalMotion"));
+        if (hasOrbitalMotion) {
+            double ra0deg = (Double) starData.get("ra");
+            double dec0deg = (Double) starData.get("dec");
+            double parallax = (Double) starData.get("parallax"); // mas
+            double pmra = (Double) starData.get("pmra"); // mas/yr
+            double pmdec = (Double) starData.get("pmdec"); // mas/yr
+            Double radialVelocity = (Double) starData.get("radialVelocity"); // km/s
+
+            double orbitalPeriod = ((Number) starData.getOrDefault("orbitalPeriod", 0.0)).doubleValue();
+            double eccentricity = ((Number) starData.getOrDefault("eccentricity", 0.0)).doubleValue();
+            double inclination = ((Number) starData.getOrDefault("inclination", 0.0)).doubleValue();
+
+            double dt = timePeriodYears / timeSteps;
+            double ra0 = Math.toRadians(ra0deg);
+            double dec0 = Math.toRadians(dec0deg);
+
+            for (int i = 0; i <= timeSteps; i++) {
+                double t = i * dt;
+                Map<String, Double> pos = calculateOrbitalPosition(
+                    ra0, dec0,
+                    (1000.0 / parallax) * PC_TO_AU, // distance in AU
+                    orbitalPeriod, eccentricity, inclination, t
+                );
+
+                double ra_deg = pos.get("ra");
+                double dec_deg = pos.get("dec");
+                double distance_ly = pos.get("distance") * 3.26156; // AU -> ly via pc
+
+                Map<String, Object> prediction = new HashMap<>();
+                prediction.put("time", t);
+                prediction.put("ra", ra_deg);
+                prediction.put("dec", dec_deg);
+                prediction.put("distanceLy", distance_ly);
+
+                // Speeds (reuse simple chart-friendly calcs)
+                double pmra_rad = pmra * MAS_TO_RAD;
+                double pmdec_rad = pmdec * MAS_TO_RAD;
+                double r_au = distance_ly / 3.26156 * PC_TO_AU;
+                double tangential_velocity_km_s = Math.sqrt(
+                    Math.pow(pmra_rad * r_au, 2) + Math.pow(pmdec_rad * r_au, 2)
+                ) * (1.0 / KM_S_TO_AU_YR);
+                prediction.put("tangentialVelocityKmS", tangential_velocity_km_s);
+                double rv_kms = radialVelocity != null ? radialVelocity : 0.0;
+                prediction.put("radialVelocityKmS", rv_kms);
+                prediction.put("totalVelocityKmS", Math.sqrt(tangential_velocity_km_s * tangential_velocity_km_s + rv_kms * rv_kms));
+                prediction.put("angularSeparationArcsec", calculateAngularSeparation(ra0deg, dec0deg, ra_deg, dec_deg) * 3600.0);
+
+                Map<String, Object> solar = calculateSolarSystemPosition(ra_deg, dec_deg, distance_ly, t);
+                prediction.put("galacticLongitude", solar.get("galacticLongitude"));
+                prediction.put("galacticLatitude", solar.get("galacticLatitude"));
+
+                out.add(prediction);
+            }
+            return out;
+        }
+
+        double ra0 = Math.toRadians((Double) starData.get("ra"));
+        double dec0 = Math.toRadians((Double) starData.get("dec"));
+        double parallax = (Double) starData.get("parallax"); // mas
+        double pmra = (Double) starData.get("pmra"); // mas/yr
+        double pmdec = (Double) starData.get("pmdec"); // mas/yr
+        Double radialVelocity = (Double) starData.get("radialVelocity"); // km/s
+
+        // Distance in AU
+        double distance_pc = 1000.0 / parallax;
+        double distance_au = distance_pc * PC_TO_AU;
+
+        // Unit vectors
+        double cosDec = Math.cos(dec0), sinDec = Math.sin(dec0);
+        double cosRa = Math.cos(ra0), sinRa = Math.sin(ra0);
+        // r-hat
+        double rx = cosDec * cosRa;
+        double ry = cosDec * sinRa;
+        double rz = sinDec;
+        // u_ra (increasing RA)
+        double urax = -sinRa;
+        double uray = cosRa;
+        double uraz = 0.0;
+        // u_dec (increasing Dec)
+        double udecx = -cosRa * sinDec;
+        double udecy = -sinRa * sinDec;
+        double udecz = cosDec;
+
+        // Convert PM to rad/yr
+        double pmra_rad_yr = pmra * MAS_TO_RAD;
+        double pmdec_rad_yr = pmdec * MAS_TO_RAD;
+
+        // Tangential velocity (AU/yr)
+        // Use mu_alpha* (pmra_rad_yr) directly with e_ra, and mu_delta with e_dec
+        double vtx = distance_au * (pmra_rad_yr * urax + pmdec_rad_yr * udecx);
+        double vty = distance_au * (pmra_rad_yr * uray + pmdec_rad_yr * udecy);
+        double vtz = distance_au * (pmra_rad_yr * uraz + pmdec_rad_yr * udecz);
+        // Radial velocity (AU/yr)
+        double rv_au_yr = radialVelocity != null ? radialVelocity * KM_S_TO_AU_YR : 0.0;
+        double vrx = rv_au_yr * rx;
+        double vry = rv_au_yr * ry;
+        double vrz = rv_au_yr * rz;
+
+        NewtonianPhysics.StateVector state = new NewtonianPhysics.StateVector(
+            new NewtonianPhysics.Vec3(distance_au * rx, distance_au * ry, distance_au * rz),
+            new NewtonianPhysics.Vec3(vtx + vrx, vty + vry, vtz + vrz)
+        );
+
+        double dt = timePeriodYears / timeSteps;
+        double mu = NewtonianPhysics.G_AU3_MSUN_YR2; // central 1 Msun
+
+        for (int i = 0; i <= timeSteps; i++) {
+            // Convert to RA/Dec/Distance
+            double x = state.position.x, y = state.position.y, z = state.position.z;
+            double r = Math.sqrt(x*x + y*y + z*z);
+            double ra_deg = Math.toDegrees(Math.atan2(y, x));
+            if (ra_deg < 0) ra_deg += 360.0;
+            double dec_deg = Math.toDegrees(Math.asin(z / r));
+            double current_distance_ly = (r / PC_TO_AU) * 3.26156; // AU -> pc -> ly
+
+            Map<String, Object> prediction = new HashMap<>();
+            prediction.put("time", i * dt);
+            prediction.put("ra", ra_deg);
+            prediction.put("dec", dec_deg);
+            prediction.put("distanceLy", current_distance_ly);
+            // Speeds (reuse simple calculations for chart compatibility)
+            double pmra_val = pmra; double pmdec_val = pmdec;
+            double pmra_rad = pmra_val * MAS_TO_RAD;
+            double pmdec_rad = pmdec_val * MAS_TO_RAD;
+            double tangential_velocity_km_s = Math.sqrt(
+                Math.pow(pmra_rad * r, 2) + Math.pow(pmdec_rad * r, 2)
+            ) * (1.0 / KM_S_TO_AU_YR);
+            prediction.put("tangentialVelocityKmS", tangential_velocity_km_s);
+            double rv_kms = radialVelocity != null ? radialVelocity : 0.0;
+            prediction.put("radialVelocityKmS", rv_kms);
+            prediction.put("totalVelocityKmS", Math.sqrt(tangential_velocity_km_s * tangential_velocity_km_s + rv_kms * rv_kms));
+            prediction.put("angularSeparationArcsec", calculateAngularSeparation(Math.toDegrees(ra0), Math.toDegrees(dec0), ra_deg, dec_deg) * 3600.0);
+
+            // Add simple galactic placeholder from existing method
+            Map<String, Object> solar = calculateSolarSystemPosition(ra_deg, dec_deg, current_distance_ly, i * dt);
+            prediction.put("galacticLongitude", solar.get("galacticLongitude"));
+            prediction.put("galacticLatitude", solar.get("galacticLatitude"));
+
+            out.add(prediction);
+
+            if (i < timeSteps) {
+                // Decide bound vs unbound: specific energy epsilon = v^2/2 - mu/r
+                double vx = state.velocity.x, vy = state.velocity.y, vz = state.velocity.z;
+                double v2 = vx*vx + vy*vy + vz*vz;
+                double epsilon = 0.5 * v2 - mu / r; // AU^2/yr^2
+                try {
+                    if (epsilon < 0) {
+                        state = newtonian.propagateKeplerElliptic(state, mu, dt); // bound: elliptic
+                    } else {
+                        // unbound: drift linearly
+                        state = new NewtonianPhysics.StateVector(
+                            state.position.add(state.velocity.mul(dt)), state.velocity
+                        );
+                    }
+                } catch (Exception ex) {
+                    // Fallback to linear drift if solver fails
+                    state = new NewtonianPhysics.StateVector(
+                        state.position.add(state.velocity.mul(dt)), state.velocity
+                    );
+                }
+            }
+        }
+        return out;
     }
 
     private Map<String, Object> calculateUncertaintyBands(Map<String, Object> nominalStarData,
